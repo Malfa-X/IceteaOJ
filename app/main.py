@@ -55,7 +55,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             await submission_repository.finish_submission(
                 submission_id=submission_id,
                 status=SubmissionStatus.ERROR,
-                error_info=str(error),
+                error_info="judge task failed",
             )
 
     app = FastAPI(

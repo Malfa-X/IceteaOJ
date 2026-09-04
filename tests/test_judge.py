@@ -155,3 +155,17 @@ def test_judge_cpp_compilation_error():
     assert result.compile_info.result == "error"
     assert result.score == 0
     assert result.details[0].result == TestCaseStatus.CE
+
+def test_judge_python_memory_limit_exceeded():
+    submission = SubmissionCreate(
+        problem_id="P1001",
+        language="python",
+        code="items = []\nwhile True:\n    items.append('x' * 1024 * 1024)",
+    )
+
+    problem = make_problem().model_copy(update={"time_limit": 2.0, "memory_limit": 32})
+
+    result = asyncio.run(judge_submission(problem, submission, python_language()))
+
+    assert result.score == 0
+    assert result.details[0].result == TestCaseStatus.MLE
