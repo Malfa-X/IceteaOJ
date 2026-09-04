@@ -110,3 +110,13 @@ class Submission(BaseModel):
     compile_info: CompileInfo | None = None
     run_info: RunInfo | None = None
     error_info: str | None = None
+
+class LanguageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    file_ext: str = Field(min_length=1)
+    compile_cmd: str = ""
+    run_cmd: str = Field(min_length=1)
+    time_limit: float = Field(default=3.0, gt=0)
+    memory_limit: int = Field(default=128, gt=0)
