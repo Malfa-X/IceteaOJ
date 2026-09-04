@@ -1,8 +1,15 @@
 import pytest
 from pydantic import ValidationError
 
-from app.models import Problem
-
+from app.models import (
+    Problem,
+    JudgeResult,
+    Submission,
+    SubmissionCreate,
+    SubmissionStatus,
+    TestCaseResult,
+    TestCaseStatus,
+)
 
 def make_problem_payload() -> dict:
     return {
@@ -74,3 +81,69 @@ def test_problem_rejects_non_positive_limits():
     with pytest.raises(ValidationError):
         Problem.model_validate(payload)
 
+def test_submission_create_accepts_required_fields():
+    submission = SubmissionCreate.model_validate(
+        {
+            "problem_id": "P1001",
+            "language": "python",
+            "code": "print(input())",
+        }
+    )
+
+    assert submission.problem_id == "P1001"
+    assert submission.language == "python"
+    assert submission.code == "print(input())"
+
+
+def test_submission_create_rejects_empty_code():
+    with pytest.raises(ValidationError):
+        SubmissionCreate.model_validate(
+            {
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "",
+            }
+        )
+
+
+def test_submission_defaults_to_pending():
+    submission = Submission(
+        submission_id="1",
+        problem_id="P1001",
+        language="python",
+        code="print(1)",
+    )
+
+    assert submission.status == SubmissionStatus.PENDING
+    assert submission.score is None
+    assert submission.counts is None
+
+
+def test_judge_result_contains_case_details():
+    result = JudgeResult(
+        score=10,
+        counts=20,
+        run_info={
+            "result": "finished",
+            "message": "2 test cases finished",
+        },
+        details=[
+            TestCaseResult(
+                id=1,
+                result=TestCaseStatus.AC,
+                time=0.01,
+                memory=10,
+            ),
+            TestCaseResult(
+                id=2,
+                result=TestCaseStatus.WA,
+                time=0.02,
+                memory=11,
+            ),
+        ],
+    )
+
+    assert result.score == 10
+    assert result.counts == 20
+    assert result.details[0].result == TestCaseStatus.AC
+    assert result.details[1].result == TestCaseStatus.WA
