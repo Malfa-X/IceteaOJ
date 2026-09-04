@@ -7,8 +7,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.judge import judge_submission
-from app.languages import LanguageNotFoundError, LanguageRegistry
-from app.models import Problem, ProblemId, SubmissionCreate, SubmissionStatus
+from app.languages import LanguageAlreadyExistsError, LanguageNotFoundError, LanguageRegistry
+from app.models import Problem, ProblemId, SubmissionCreate, SubmissionStatus, LanguageConfig
 from app.submission_repository import SubmissionNotFoundError, SubmissionRepository
 from app.repository import (
     ProblemAlreadyExistsError,
@@ -106,6 +106,13 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             content=api_response(404, "submission not found"),
         )
 
+    @app.exception_handler(LanguageAlreadyExistsError)
+    async def language_exists_handler(_, __):
+        return JSONResponse(
+            status_code=409,
+            content=api_response(409, "language already exists"),
+        )
+
     @app.get("/api/health")
     async def health_check() -> dict:
         return api_response(200, "success", {"status": "ok"})
@@ -145,6 +152,27 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             }
 
         return api_response(200, "success", data)
+
+    @app.get("/api/languages/")
+    async def list_languages() -> dict:
+        return api_response(
+            200,
+            "success",
+            {
+                "name": language_registry.list_languages(),
+            },
+        )
+
+    @app.post("/api/languages/")
+    async def add_language(language: LanguageConfig) -> dict:
+        language_registry.register_language(language)
+        return api_response(
+            200,
+            "language registered",
+            {
+                "name": language.name,
+            },
+        )
 
     @app.post("/api/problems/")
     async def add_problem(problem: Problem) -> dict:

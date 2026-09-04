@@ -1,9 +1,11 @@
 import asyncio
 import time
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from app.models import (
+    CompileInfo,
     JudgeResult,
     LanguageConfig,
     Problem,
@@ -29,11 +31,38 @@ async def judge_submission(
 
     with TemporaryDirectory() as temp_dir:
         source_path = Path(temp_dir) / f"main{language.file_ext}"
+        exe_path = Path(temp_dir) / executable_name("main")
         source_path.write_text(submission.code, encoding="utf-8")
+
+        if language.compile_cmd:
+            compile_result = await compile_source(
+                compile_cmd=language.compile_cmd,
+                source_path=source_path,
+                exe_path=exe_path,
+                time_limit=language.time_limit,
+            )
+            if compile_result.result != "success":
+                return JudgeResult(
+                    score=0,
+                    counts=counts,
+                    compile_info=compile_result,
+                    run_info=RunInfo(result="not_started", message="compile failed"),
+                    error_info=compile_result.message,
+                    details=[
+                        TestCaseResult(
+                            id=index,
+                            result=TestCaseStatus.CE,
+                        )
+                        for index in range(1, len(problem.testcases) + 1)
+                    ],
+                )
+        else:
+            compile_result = None
 
         for index, testcase in enumerate(problem.testcases, start=1):
             case_result = await run_single_case(
                 source_path=source_path,
+                exe_path=exe_path,
                 run_cmd=language.run_cmd,
                 testcase_input=testcase.input,
                 expected_output=testcase.output,
@@ -49,6 +78,7 @@ async def judge_submission(
     return JudgeResult(
         score=score,
         counts=counts,
+        compile_info=compile_result,
         run_info=RunInfo(
             result="finished",
             message=f"{len(problem.testcases)} test cases finished",
@@ -56,9 +86,9 @@ async def judge_submission(
         details=details,
     )
 
-
 async def run_single_case(
     source_path: Path,
+    exe_path: Path,
     run_cmd: str,
     testcase_input: str,
     expected_output: str,
@@ -66,7 +96,7 @@ async def run_single_case(
     memory_limit: int,
     case_id: int,
 ) -> TestCaseResult:
-    command = build_command(run_cmd, source_path)
+    command = build_command(run_cmd, source_path, exe_path)
     start_time = time.perf_counter()
 
     try:
@@ -118,6 +148,7 @@ async def run_single_case(
             time=elapsed_time,
             memory=0,
         )
+    
     except OSError:
         elapsed_time = time.perf_counter() - start_time
         return TestCaseResult(
@@ -127,7 +158,48 @@ async def run_single_case(
             memory=0,
         )
 
+async def compile_source(
+    compile_cmd: str,
+    source_path: Path,
+    exe_path: Path,
+    time_limit: float,
+) -> CompileInfo:
+    command = build_command(compile_cmd, source_path, exe_path)
 
-def build_command(run_cmd: str, source_path: Path) -> list[str]:
-    command_text = run_cmd.format(src=str(source_path))
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        _, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=time_limit,
+        )
+
+        if process.returncode == 0:
+            return CompileInfo(result="success", message="")
+
+        return CompileInfo(
+            result="error",
+            message=stderr.decode(errors="replace")[:2000],
+        )
+
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        return CompileInfo(result="error", message="compile timeout")
+    except OSError as error:
+        return CompileInfo(result="error", message=str(error))
+
+
+def executable_name(name: str) -> str:
+    if sys.platform.startswith("win"):
+        return f"{name}.exe"
+
+    return name
+
+def build_command(run_cmd: str, source_path: Path, exe_path: Path) -> list[str]:
+    command_text = run_cmd.format(src=str(source_path), exe=str(exe_path))
     return command_text.split()

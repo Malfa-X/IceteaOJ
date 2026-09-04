@@ -97,7 +97,7 @@ def test_submission_api_rejects_missing_language(tmp_path):
             "/api/submissions/",
             json={
                 "problem_id": "P1001",
-                "language": "cpp",
+                "language": "rust",
                 "code": "int main(){}",
             },
         )

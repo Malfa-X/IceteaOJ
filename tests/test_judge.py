@@ -1,3 +1,5 @@
+import shutil
+import pytest
 import asyncio
 
 from app.judge import judge_submission, normalize_output
@@ -36,6 +38,13 @@ def python_language() -> LanguageConfig:
         run_cmd="python {src}",
     )
 
+def cpp_language() -> LanguageConfig:
+    return LanguageConfig(
+        name="cpp",
+        file_ext=".cpp",
+        compile_cmd="g++ {src} -o {exe}",
+        run_cmd="{exe}",
+    )
 
 def test_normalize_output_ignores_trailing_space_and_newline():
     assert normalize_output("3   \n") == "3"
@@ -101,3 +110,48 @@ def test_judge_python_time_limit_exceeded():
 
     assert result.score == 0
     assert result.details[0].result == TestCaseStatus.TLE
+
+@pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+
+def test_judge_cpp_accepted_answer():
+    submission = SubmissionCreate(
+        problem_id="P1001",
+        language="cpp",
+        code="""
+#include <iostream>
+using namespace std;
+
+int main() {
+    long long a, b;
+    cin >> a >> b;
+    cout << a + b << endl;
+    return 0;
+}
+""",
+    )
+
+    result = asyncio.run(judge_submission(make_problem(), submission, cpp_language()))
+
+    assert result.compile_info is not None
+    assert result.compile_info.result == "success"
+    assert result.score == 20
+    assert result.counts == 20
+    assert [case.result for case in result.details] == [
+        TestCaseStatus.AC,
+        TestCaseStatus.AC,
+    ]
+
+
+def test_judge_cpp_compilation_error():
+    submission = SubmissionCreate(
+        problem_id="P1001",
+        language="cpp",
+        code="int main() { syntax error }",
+    )
+
+    result = asyncio.run(judge_submission(make_problem(), submission, cpp_language()))
+
+    assert result.compile_info is not None
+    assert result.compile_info.result == "error"
+    assert result.score == 0
+    assert result.details[0].result == TestCaseStatus.CE
