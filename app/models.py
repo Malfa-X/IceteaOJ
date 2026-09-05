@@ -96,6 +96,15 @@ class JudgeResult(BaseModel):
     error_info: str = ""
     details: list[TestCaseResult] = Field(default_factory=list)
 
+class SubmissionLog(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    submission_id: str
+    problem_id: ProblemId
+    user_id: str
+    details: list[TestCaseResult] = Field(default_factory=list)
+    score: int = Field(ge=0)
+    counts: int = Field(ge=0)
 
 class Submission(BaseModel):
     model_config = ConfigDict(extra="forbid")
