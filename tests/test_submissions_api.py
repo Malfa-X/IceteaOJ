@@ -112,3 +112,201 @@ def test_submission_api_rejects_missing_submission(tmp_path):
 
     assert response.status_code == 404
     assert response.json()["msg"] == "submission not found"
+
+def test_submission_list_api_filters_by_problem_id(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        first = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print(0)",
+            },
+        ).json()["data"]
+
+        second = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "a, b = map(int, input().split())\nprint(a + b)",
+            },
+        ).json()["data"]
+
+        response = client.get("/api/submissions/?problem_id=P1001")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 2
+    assert [item["submission_id"] for item in data["submissions"]] == [
+        second["submission_id"],
+        first["submission_id"],
+    ]
+
+
+def test_submission_list_api_filters_by_status(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print(0)",
+            },
+        )
+        client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "a, b = map(int, input().split())\nprint(a + b)",
+            },
+        )
+
+        response = client.get("/api/submissions/?problem_id=P1001&status=success")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 2
+    assert all(item["status"] == "success" for item in data["submissions"])
+
+
+def test_submission_list_api_supports_pagination(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        for index in range(5):
+            client.post(
+                "/api/submissions/",
+                json={
+                    "problem_id": "P1001",
+                    "language": "python",
+                    "code": f"print({index})",
+                },
+            )
+
+        response = client.get("/api/submissions/?problem_id=P1001&page=2&page_size=2")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 5
+    assert len(data["submissions"]) == 2
+
+
+def test_submission_list_api_rejects_missing_primary_filter(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.get("/api/submissions/")
+
+    assert response.status_code == 400
+    assert response.json()["msg"] == "user_id or problem_id is required"
+
+
+def test_submission_list_api_rejects_page_without_page_size(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.get("/api/submissions/?problem_id=P1001&page=1")
+
+    assert response.status_code == 400
+    assert response.json()["msg"] == "page_size is required when page is set"
+
+def test_submission_list_api_filters_by_problem_id(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        first = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print(0)",
+            },
+        ).json()["data"]
+
+        second = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "a, b = map(int, input().split())\nprint(a + b)",
+            },
+        ).json()["data"]
+
+        response = client.get("/api/submissions/?problem_id=P1001")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 2
+    assert [item["submission_id"] for item in data["submissions"]] == [
+        second["submission_id"],
+        first["submission_id"],
+    ]
+
+
+def test_submission_list_api_filters_by_status(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print(0)",
+            },
+        )
+        client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "a, b = map(int, input().split())\nprint(a + b)",
+            },
+        )
+
+        response = client.get("/api/submissions/?problem_id=P1001&status=success")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 2
+    assert all(item["status"] == "success" for item in data["submissions"])
+
+
+def test_submission_list_api_supports_pagination(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        for index in range(5):
+            client.post(
+                "/api/submissions/",
+                json={
+                    "problem_id": "P1001",
+                    "language": "python",
+                    "code": f"print({index})",
+                },
+            )
+
+        response = client.get("/api/submissions/?problem_id=P1001&page=2&page_size=2")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 5
+    assert len(data["submissions"]) == 2
+
+
+def test_submission_list_api_rejects_missing_primary_filter(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.get("/api/submissions/")
+
+    assert response.status_code == 400
+    assert response.json()["msg"] == "user_id or problem_id is required"
+
+
+def test_submission_list_api_rejects_page_without_page_size(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.get("/api/submissions/?problem_id=P1001&page=1")
+
+    assert response.status_code == 400
+    assert response.json()["msg"] == "page_size is required when page is set"

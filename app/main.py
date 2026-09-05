@@ -58,6 +58,38 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
                 error_info="judge task failed",
             )
 
+    def validate_submission_list_params(
+        user_id: str | None,
+        problem_id: str | None,
+        page: int | None,
+        page_size: int | None,
+    ) -> JSONResponse | None:
+        if user_id is None and problem_id is None:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "user_id or problem_id is required"),
+            )
+
+        if page is not None and page_size is None:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page_size is required when page is set"),
+            )
+
+        if page is not None and page <= 0:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page must be positive"),
+            )
+
+        if page_size is not None and page_size <= 0:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page_size must be positive"),
+            )
+
+        return None
+
     app = FastAPI(
         title="IceteaOJ",
         version="0.1.0",
@@ -122,6 +154,56 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         problems = await repository.list_problems()
         data = [problem.model_dump(mode="json") for problem in problems]
         return api_response(200, "success", data)
+
+    @app.get("/api/submissions/")
+    async def list_submissions(
+        user_id: str | None = None,
+        problem_id: str | None = None,
+        status: SubmissionStatus | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> dict:
+        error_response = validate_submission_list_params(
+            user_id=user_id,
+            problem_id=problem_id,
+            page=page,
+            page_size=page_size,
+        )
+        if error_response is not None:
+            return error_response
+
+        if page is None and page_size is not None:
+            page = 1
+
+        total, submissions = await submission_repository.list_submissions(
+            user_id=user_id,
+            problem_id=problem_id,
+            status=status,
+            page=page,
+            page_size=page_size,
+        )
+
+        data = []
+        for submission in submissions:
+            item = {
+                "submission_id": submission.submission_id,
+                "status": submission.status,
+            }
+
+            if submission.status == SubmissionStatus.SUCCESS:
+                item["score"] = submission.score
+                item["counts"] = submission.counts
+
+            data.append(item)
+
+        return api_response(
+            200,
+            "success",
+            {
+                "total": total,
+                "submissions": data,
+            },
+        )
 
     @app.get("/api/submissions/{submission_id}")
     async def get_submission(submission_id: str) -> dict:

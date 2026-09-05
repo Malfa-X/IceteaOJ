@@ -41,7 +41,7 @@ async def judge_submission(
                 compile_cmd=language.compile_cmd,
                 source_path=source_path,
                 exe_path=exe_path,
-                time_limit=language.time_limit,
+                time_limit=max(language.time_limit, 10.0),
             )
             if compile_result.result != "success":
                 return JudgeResult(
