@@ -97,6 +97,18 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
         return None
 
+    def submission_to_summary(submission) -> dict:
+        item = {
+            "submission_id": submission.submission_id,
+            "status": submission.status,
+        }
+
+        if submission.status == SubmissionStatus.SUCCESS:
+            item["score"] = submission.score
+            item["counts"] = submission.counts
+
+        return item
+
     app = FastAPI(
         title="IceteaOJ",
         version="0.1.0",
@@ -190,18 +202,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             page_size=page_size,
         )
 
-        data = []
-        for submission in submissions:
-            item = {
-                "submission_id": submission.submission_id,
-                "status": submission.status,
-            }
-
-            if submission.status == SubmissionStatus.SUCCESS:
-                item["score"] = submission.score
-                item["counts"] = submission.counts
-
-            data.append(item)
+        data = [submission_to_summary(submission) for submission in submissions]
 
         return api_response(
             200,

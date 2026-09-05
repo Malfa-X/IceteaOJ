@@ -350,3 +350,64 @@ def test_rejudge_submission_api_rejects_missing_submission(tmp_path):
 
     assert response.status_code == 404
     assert response.json()["msg"] == "submission not found"
+
+def test_submission_list_api_uses_first_page_when_only_page_size_is_set(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        for index in range(3):
+            client.post(
+                "/api/submissions/",
+                json={
+                    "problem_id": "P1001",
+                    "language": "python",
+                    "code": f"print({index})",
+                },
+            )
+
+        response = client.get("/api/submissions/?problem_id=P1001&page_size=2")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 3
+    assert len(data["submissions"]) == 2
+    assert [item["submission_id"] for item in data["submissions"]] == ["3", "2"]
+
+def test_submission_list_api_rejects_invalid_pagination(tmp_path):
+    with make_client(tmp_path) as client:
+        page_response = client.get("/api/submissions/?problem_id=P1001&page=0&page_size=2")
+        page_size_response = client.get(
+            "/api/submissions/?problem_id=P1001&page=1&page_size=0"
+        )
+
+    assert page_response.status_code == 400
+    assert page_response.json()["msg"] == "page must be positive"
+
+    assert page_size_response.status_code == 400
+    assert page_size_response.json()["msg"] == "page_size must be positive"
+
+def test_submission_list_api_rejects_invalid_status(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.get("/api/submissions/?problem_id=P1001&status=finished")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == 400
+
+def test_submission_list_api_does_not_return_code(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print('secret code')",
+            },
+        )
+
+        response = client.get("/api/submissions/?problem_id=P1001")
+
+    assert response.status_code == 200
+    submission = response.json()["data"]["submissions"][0]
+    assert "code" not in submission
