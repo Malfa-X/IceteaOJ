@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 
 from api_client import ApiClient
@@ -14,10 +15,37 @@ def get_api_client() -> ApiClient:
 
     return st.session_state.api_client
 
+def parse_json_text(text: str) -> tuple[dict | None, str | None]:
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError as error:
+        return None, f"Invalid JSON: {error}"
 
 def reset_api_client() -> None:
     st.session_state.api_client = ApiClient(st.session_state.api_base_url)
 
+def default_problem_payload() -> dict:
+    return {
+        "id": "P1001",
+        "title": "A+B Problem",
+        "description": "Calculate a + b.",
+        "input_description": "Two integers a and b.",
+        "output_description": "The sum of a and b.",
+        "samples": [{"input": "1 2", "output": "3"}],
+        "constraints": "|a|, |b| <= 10^9",
+        "testcases": [
+            {"input": "1 2", "output": "3"},
+            {"input": "-2 5", "output": "3"},
+        ],
+        "hint": "",
+        "source": "",
+        "tags": ["basic"],
+        "time_limit": 1.0,
+        "memory_limit": 128,
+        "author": "",
+        "difficulty": "easy",
+        "public_cases": False,
+    }
 
 st.set_page_config(
     page_title="IceteaOJ",
@@ -182,6 +210,113 @@ elif page == "Users":
                 st.json(result.data)
             else:
                 st.error(result.msg)
+
+elif page == "Problems":
+    st.header("Problems")
+
+    current_user = st.session_state.get("current_user")
+    if not current_user:
+        st.info("Please login first.")
+    else:
+        list_tab, detail_tab, create_tab, edit_tab, delete_tab = st.tabs(
+            ["List", "Detail", "Create", "Edit", "Delete"]
+        )
+
+        with list_tab:
+            if st.button("Load problems"):
+                result = client.get("/api/problems/")
+                if result.ok:
+                    st.session_state.problems_data = result.data
+                else:
+                    st.error(result.msg)
+
+            problems_data = st.session_state.get("problems_data")
+            if problems_data:
+                st.dataframe(problems_data, use_container_width=True)
+            else:
+                st.info("Click load to fetch problems.")
+
+        with detail_tab:
+            problem_id = st.text_input("Problem ID", key="detail_problem_id")
+            if st.button("Load problem detail"):
+                result = client.get(f"/api/problems/{problem_id}")
+                if result.ok:
+                    st.json(result.data)
+                    st.session_state.last_problem_detail = result.data
+                else:
+                    st.error(result.msg)
+
+        with create_tab:
+            initial_text = json.dumps(
+                default_problem_payload(),
+                ensure_ascii=False,
+                indent=2,
+            )
+            problem_text = st.text_area(
+                "Problem JSON",
+                value=initial_text,
+                height=420,
+                key="create_problem_json",
+            )
+
+            if st.button("Create problem"):
+                payload, error = parse_json_text(problem_text)
+                if error:
+                    st.error(error)
+                else:
+                    result = client.post("/api/problems/", json=payload)
+                    if result.ok:
+                        st.success("Problem created")
+                        st.json(result.data)
+                    else:
+                        st.error(result.msg)
+
+        with edit_tab:
+            problem_id = st.text_input("Problem ID", key="edit_problem_id")
+
+            if st.button("Load problem for editing"):
+                result = client.get(f"/api/problems/{problem_id}")
+                if result.ok:
+                    st.session_state.edit_problem_text_area = json.dumps(
+                        result.data,
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                else:
+                    st.error(result.msg)
+
+            problem_text = st.text_area(
+                "Updated Problem JSON",
+                value=json.dumps(default_problem_payload(), ensure_ascii=False, indent=2),
+                height=420,
+                key="edit_problem_text_area",
+            )
+
+            if st.button("Update problem"):
+                payload, error = parse_json_text(problem_text)
+                if error:
+                    st.error(error)
+                elif payload.get("id") != problem_id:
+                    st.error("Path problem id and JSON id must match.")
+                else:
+                    result = client.put(f"/api/problems/{problem_id}", json=payload)
+                    if result.ok:
+                        st.success("Problem updated")
+                        st.json(result.data)
+                    else:
+                        st.error(result.msg)
+
+        with delete_tab:
+            problem_id = st.text_input("Problem ID", key="delete_problem_id")
+            st.warning("Deleting a problem requires administrator permission.")
+
+            if st.button("Delete problem"):
+                result = client.delete(f"/api/problems/{problem_id}")
+                if result.ok:
+                    st.success("Problem deleted")
+                    st.json(result.data)
+                else:
+                    st.error(result.msg)
 
 else:
     st.info("This page will be implemented in the next frontend stage.")
