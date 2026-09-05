@@ -76,3 +76,18 @@ def test_access_log_repository_records_and_filters_logs():
         assert p1002_logs[0].user_id == "bob"
 
     asyncio.run(run_test())
+
+def test_access_log_repository_paginates_logs():
+    async def run_test():
+        repository = AccessLogRepository()
+
+        await repository.record(user_id="alice", problem_id="P1001", status="200")
+        await repository.record(user_id="bob", problem_id="P1001", status="403")
+        await repository.record(user_id="carol", problem_id="P1002", status="200")
+
+        logs = await repository.list_logs(page=2, page_size=1)
+
+        assert len(logs) == 1
+        assert logs[0].user_id == "bob"
+
+    asyncio.run(run_test())

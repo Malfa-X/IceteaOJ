@@ -153,3 +153,26 @@ def test_log_visibility_update_requires_admin(tmp_path):
 
     assert response.status_code == 403
     assert response.json()["msg"] == "permission denied"
+
+def test_log_visibility_update_requires_login(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.put(
+            "/api/problems/sum_2/log_visibility",
+            json={"public_cases": True},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["msg"] == "not logged in"
+
+
+def test_log_visibility_update_rejects_missing_problem(tmp_path):
+    with make_client(tmp_path) as client:
+        login_admin(client)
+
+        response = client.put(
+            "/api/problems/missing/log_visibility",
+            json={"public_cases": True},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["msg"] == "problem not found"
