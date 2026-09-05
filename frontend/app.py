@@ -61,6 +61,10 @@ int main() {
 """
     return "a, b = map(int, input().split())\nprint(a + b)\n"
 
+def reset_submission_code_template() -> None:
+    language = st.session_state.submit_language
+    st.session_state.submit_code = default_code_template(language)
+
 st.set_page_config(
     page_title="IceteaOJ",
     page_icon="OJ",
@@ -351,10 +355,17 @@ elif page == "Submissions":
                 st.warning(languages_result.msg)
 
             problem_id = st.text_input("Problem ID", key="submit_problem_id")
-            language = st.selectbox("Language", languages, key="submit_language")
+            language = st.selectbox(
+                "Language",
+                languages,
+                key="submit_language",
+                on_change=reset_submission_code_template,
+            )
+            if "submit_code" not in st.session_state:
+                st.session_state.submit_code = default_code_template(language)
+
             code = st.text_area(
                 "Code",
-                value=default_code_template(language),
                 height=360,
                 key="submit_code",
             )
