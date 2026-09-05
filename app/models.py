@@ -121,3 +121,49 @@ class LanguageConfig(BaseModel):
     run_cmd: str = Field(min_length=1)
     time_limit: float = Field(default=3.0, gt=0)
     memory_limit: int = Field(default=128, gt=0)
+
+class UserRole(StrEnum):
+    USER = "user"
+    ADMIN = "admin"
+    BANNED = "banned"
+
+
+class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=3, max_length=40)
+    password: str = Field(min_length=6)
+
+
+class UserLogin(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=3, max_length=40)
+    password: str = Field(min_length=6)
+
+
+class UserRoleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: UserRole
+
+
+class User(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    username: str
+    password_hash: str
+    join_time: str
+    role: UserRole = UserRole.USER
+    submit_count: int = 0
+    resolve_count: int = 0
+
+
+class UserPublic(BaseModel):
+    user_id: str
+    username: str
+    join_time: str
+    role: UserRole
+    submit_count: int
+    resolve_count: int
