@@ -41,6 +41,7 @@ class Problem(BaseModel):
     memory_limit: int = Field(default=128, gt=0)
     author: str = ""
     difficulty: str = ""
+    public_cases: bool = False
 
 
 class ProblemSummary(BaseModel):
@@ -176,3 +177,16 @@ class UserPublic(BaseModel):
     role: UserRole
     submit_count: int
     resolve_count: int
+
+class LogVisibilityUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    public_cases: bool = False
+
+
+class AccessLog(BaseModel):
+    user_id: str
+    problem_id: ProblemId
+    action: str = "view_logs"
+    time: str
+    status: str

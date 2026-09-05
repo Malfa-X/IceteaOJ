@@ -121,3 +121,35 @@ def test_problem_delete_requires_admin(tmp_path):
 
     assert response.status_code == 403
     assert response.json()["msg"] == "permission denied"
+
+def test_admin_can_update_problem_log_visibility(tmp_path):
+    with make_client(tmp_path) as client:
+        login_admin(client)
+        client.post("/api/problems/", json=make_problem_payload())
+
+        response = client.put(
+            "/api/problems/sum_2/log_visibility",
+            json={"public_cases": True},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "problem_id": "sum_2",
+        "public_cases": True,
+    }
+
+def test_log_visibility_update_requires_admin(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/users/", json={"username": "alice", "password": "password123"})
+        client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "password123"},
+        )
+
+        response = client.put(
+            "/api/problems/sum_2/log_visibility",
+            json={"public_cases": True},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["msg"] == "permission denied"

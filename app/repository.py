@@ -116,6 +116,23 @@ class ProblemRepository:
 
             await asyncio.to_thread(self._write_problem_file, problem_path, problem)
 
+    async def update_log_visibility(
+        self,
+        problem_id: str,
+        public_cases: bool,
+    ) -> Problem:
+        async with self._lock:
+            problem_path = self._problem_path(problem_id)
+
+            if not await asyncio.to_thread(problem_path.is_file):
+                raise ProblemNotFoundError(problem_id)
+
+            problem = await asyncio.to_thread(self._read_problem_file, problem_path)
+            updated_problem = problem.model_copy(update={"public_cases": public_cases})
+            await asyncio.to_thread(self._write_problem_file, problem_path, updated_problem)
+
+            return updated_problem
+
     async def delete_problem(self, problem_id: str) -> None:
         async with self._lock:
             problem_path = self._problem_path(problem_id)

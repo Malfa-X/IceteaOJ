@@ -1,8 +1,10 @@
 import asyncio
-
 import pytest
-
-from app.logs import SubmissionLogNotFoundError, SubmissionLogRepository
+from app.logs import (
+    AccessLogRepository,
+    SubmissionLogNotFoundError,
+    SubmissionLogRepository,
+)
 from app.models import SubmissionLog, TestCaseResult, TestCaseStatus
 
 
@@ -53,5 +55,24 @@ def test_repository_rejects_missing_submission_log():
 
         with pytest.raises(SubmissionLogNotFoundError):
             await repository.get_log("missing")
+
+    asyncio.run(run_test())
+
+def test_access_log_repository_records_and_filters_logs():
+    async def run_test():
+        repository = AccessLogRepository()
+
+        await repository.record(user_id="alice", problem_id="P1001", status="200")
+        await repository.record(user_id="bob", problem_id="P1002", status="403")
+
+        alice_logs = await repository.list_logs(user_id="alice")
+        assert len(alice_logs) == 1
+        assert alice_logs[0].problem_id == "P1001"
+        assert alice_logs[0].action == "view_logs"
+        assert alice_logs[0].status == "200"
+
+        p1002_logs = await repository.list_logs(problem_id="P1002")
+        assert len(p1002_logs) == 1
+        assert p1002_logs[0].user_id == "bob"
 
     asyncio.run(run_test())

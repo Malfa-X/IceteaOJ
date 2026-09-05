@@ -10,6 +10,7 @@ from app.judge import judge_submission
 from app.languages import LanguageAlreadyExistsError, LanguageNotFoundError, LanguageRegistry
 from app.models import (
     LanguageConfig,
+    LogVisibilityUpdate,
     Problem,
     ProblemId,
     SubmissionCreate,
@@ -35,7 +36,11 @@ from app.users import (
     UserNotFoundError,
     UserRepository,
 )
-from app.logs import SubmissionLogNotFoundError, SubmissionLogRepository
+from app.logs import (
+    AccessLogRepository,
+    SubmissionLogNotFoundError,
+    SubmissionLogRepository,
+)
 
 def api_response(code: int, msg: str, data: object | None = None) -> dict:
     return {
@@ -52,6 +57,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
     user_repository = UserRepository()
     submission_repository = SubmissionRepository()
     submission_log_repository = SubmissionLogRepository()
+    access_log_repository = AccessLogRepository()
     user_repository = UserRepository()
 
     @asynccontextmanager
@@ -135,6 +141,30 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
                 content=api_response(400, "user_id or problem_id is required"),
             )
 
+        if page is not None and page_size is None:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page_size is required when page is set"),
+            )
+
+        if page is not None and page <= 0:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page must be positive"),
+            )
+
+        if page_size is not None and page_size <= 0:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page_size must be positive"),
+            )
+
+        return None
+
+    def validate_pagination_params(
+        page: int | None,
+        page_size: int | None,
+    ) -> JSONResponse | None:
         if page is not None and page_size is None:
             return JSONResponse(
                 status_code=400,
@@ -338,11 +368,29 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             return require_login_response()
 
         submission = await submission_repository.get_submission(submission_id)
+        problem = await repository.get_problem(submission.problem_id)
 
-        if submission.user_id != current_user.user_id and not is_admin(current_user):
+        allowed = (
+            submission.user_id == current_user.user_id
+            or is_admin(current_user)
+            or problem.public_cases
+        )
+
+        if not allowed:
+            await access_log_repository.record(
+                user_id=current_user.user_id,
+                problem_id=submission.problem_id,
+                status="403",
+            )
             return require_permission_response()
 
         log = await submission_log_repository.get_log(submission_id)
+
+        await access_log_repository.record(
+            user_id=current_user.user_id,
+            problem_id=submission.problem_id,
+            status="200",
+        )
 
         return api_response(
             200,
@@ -481,6 +529,41 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
+    @app.get("/api/logs/access/")
+    async def list_access_logs(
+        request: Request,
+        user_id: str | None = None,
+        problem_id: str | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
+
+        error_response = validate_pagination_params(page=page, page_size=page_size)
+        if error_response is not None:
+            return error_response
+
+        if page is None and page_size is not None:
+            page = 1
+
+        logs = await access_log_repository.list_logs(
+            user_id=user_id,
+            problem_id=problem_id,
+            page=page,
+            page_size=page_size,
+        )
+
+        return api_response(
+            200,
+            "success",
+            [log.model_dump(mode="json") for log in logs],
+        )
+
     @app.post("/api/problems/")
     async def add_problem(request: Request, problem: Problem):
         current_user = await get_current_user(request)
@@ -578,6 +661,33 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
         await repository.update_problem(problem_id, problem)
         return api_response(200, "update success", {"id": problem.id})
+
+    @app.put("/api/problems/{problem_id}/log_visibility")
+    async def update_problem_log_visibility(
+        request: Request,
+        problem_id: Annotated[ProblemId, ApiPath()],
+        visibility: LogVisibilityUpdate,
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
+
+        problem = await repository.update_log_visibility(
+            problem_id,
+            visibility.public_cases,
+        )
+
+        return api_response(
+            200,
+            "log visibility updated",
+            {
+                "problem_id": problem.id,
+                "public_cases": problem.public_cases,
+            },
+        )
 
     @app.put("/api/submissions/{submission_id}/rejudge")
     async def rejudge_submission(

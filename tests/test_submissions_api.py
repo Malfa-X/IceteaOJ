@@ -524,3 +524,72 @@ def test_submission_log_api_rejects_other_user(tmp_path):
 
     assert response.status_code == 403
     assert response.json()["msg"] == "permission denied"
+
+def test_public_cases_allow_other_users_to_view_submission_log(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/users/", json={"username": "alice", "password": "password123"})
+        client.post("/api/users/", json={"username": "bobby", "password": "password123"})
+
+        login_admin(client)
+        client.post("/api/problems/", json=make_problem_payload())
+        client.put("/api/problems/P1001/log_visibility", json={"public_cases": True})
+        client.post("/api/auth/logout")
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "password123"},
+        )
+        submit_response = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print(0)",
+            },
+        )
+        submission_id = submit_response.json()["data"]["submission_id"]
+        client.post("/api/auth/logout")
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "bobby", "password": "password123"},
+        )
+        response = client.get(f"/api/submissions/{submission_id}/log")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["score"] == 0
+
+
+def test_admin_can_query_log_access_records(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/users/", json={"username": "alice", "password": "password123"})
+        login_admin(client)
+        client.post("/api/problems/", json=make_problem_payload())
+        client.post("/api/auth/logout")
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "password123"},
+        )
+        submit_response = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print(0)",
+            },
+        )
+        submission_id = submit_response.json()["data"]["submission_id"]
+
+        client.get(f"/api/submissions/{submission_id}/log")
+        client.post("/api/auth/logout")
+
+        login_admin(client)
+        response = client.get("/api/logs/access/")
+
+    assert response.status_code == 200
+    logs = response.json()["data"]
+    assert len(logs) == 1
+    assert logs[0]["problem_id"] == "P1001"
+    assert logs[0]["action"] == "view_logs"
+    assert logs[0]["status"] == "200"
