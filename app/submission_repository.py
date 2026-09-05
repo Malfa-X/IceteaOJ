@@ -24,11 +24,13 @@ class SubmissionRepository:
         problem_id: str,
         language: str,
         code: str,
+        user_id: str = "anonymous",
     ) -> Submission:
         async with self._lock:
             submission_id = str(next(self._id_counter))
             submission = Submission(
                 submission_id=submission_id,
+                user_id=user_id,
                 problem_id=problem_id,
                 language=language,
                 code=code,
@@ -68,3 +70,50 @@ class SubmissionRepository:
                     "error_info": error_info,
                 }
             )
+
+    async def list_submissions(
+        self,
+        user_id: str | None = None,
+        problem_id: str | None = None,
+        status: SubmissionStatus | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> tuple[int, list[Submission]]:
+        async with self._lock:
+            submissions = list(self._submissions.values())
+
+            if user_id is not None:
+                submissions = [
+                    submission
+                    for submission in submissions
+                    if submission.user_id == user_id
+                ]
+
+            if problem_id is not None:
+                submissions = [
+                    submission
+                    for submission in submissions
+                    if submission.problem_id == problem_id
+                ]
+
+            if status is not None:
+                submissions = [
+                    submission
+                    for submission in submissions
+                    if submission.status == status
+                ]
+
+            submissions = sorted(
+                submissions,
+                key=lambda submission: int(submission.submission_id),
+                reverse=True,
+            )
+
+            total = len(submissions)
+
+            if page is not None and page_size is not None:
+                start = (page - 1) * page_size
+                end = start + page_size
+                submissions = submissions[start:end]
+
+            return total, submissions

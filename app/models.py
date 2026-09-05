@@ -101,6 +101,7 @@ class Submission(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     submission_id: str
+    user_id: str = "anonymous"
     problem_id: ProblemId
     language: str
     code: str
