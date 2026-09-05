@@ -32,3 +32,9 @@ pytest -q
 
 Step 1 暂不实现登录与管理员权限；完成 Step 4 时我们会给这些接口接入统一鉴权。
 
+## Frontend
+
+Start backend first:
+
+```bash
+uvicorn app.main:app --reload

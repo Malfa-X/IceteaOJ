@@ -7,3 +7,5 @@ websockets>=12,<13
 psutil>=6,<8
 bcrypt>=4,<6
 itsdangerous>=2,<3
+streamlit>=1.40,<2
+requests>=2.32,<3
