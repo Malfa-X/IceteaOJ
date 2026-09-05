@@ -15,6 +15,11 @@ def make_problem_payload(problem_id: str = "sum_2") -> dict:
         "testcases": [{"input": "-1 2", "output": "1"}],
     }
 
+def login_admin(client):
+    return client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admintestpassword"},
+    )
 
 def make_client(tmp_path):
     return TestClient(create_app(tmp_path / "problems"))
@@ -34,6 +39,7 @@ def test_health_check(tmp_path):
 
 def test_problem_crud_flow(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         add_response = client.post("/api/problems/", json=make_problem_payload())
         assert add_response.status_code == 200
         assert add_response.json() == {
@@ -73,6 +79,7 @@ def test_problem_crud_flow(tmp_path):
 
 def test_problem_api_errors(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.post("/api/problems/", json=make_problem_payload())
         assert response.status_code == 200
 
@@ -95,3 +102,22 @@ def test_problem_api_errors(tmp_path):
         missing_response = client.delete("/api/problems/missing")
         assert missing_response.status_code == 404
 
+def test_problem_api_requires_login(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.get("/api/problems/")
+
+    assert response.status_code == 401
+    assert response.json()["msg"] == "not logged in"
+
+def test_problem_delete_requires_admin(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/users/", json={"username": "alice", "password": "password123"})
+        client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "password123"},
+        )
+
+        response = client.delete("/api/problems/P1001")
+
+    assert response.status_code == 403
+    assert response.json()["msg"] == "permission denied"

@@ -248,19 +248,34 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         return api_response(200, "success", {"status": "ok"})
 
     @app.get("/api/problems/")
-    async def list_problems() -> dict:
+    async def list_problems(request: Request):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
         problems = await repository.list_problems()
         data = [problem.model_dump(mode="json") for problem in problems]
         return api_response(200, "success", data)
 
     @app.get("/api/submissions/")
     async def list_submissions(
+        request: Request,
         user_id: str | None = None,
         problem_id: str | None = None,
         status: SubmissionStatus | None = None,
         page: int | None = None,
         page_size: int | None = None,
-    ) -> dict:
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if user_id is not None and user_id != current_user.user_id and not is_admin(current_user):
+            return require_permission_response()
+
+        if user_id is None and not is_admin(current_user):
+            user_id = current_user.user_id
+        
         error_response = validate_submission_list_params(
             user_id=user_id,
             problem_id=problem_id,
@@ -293,9 +308,15 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         )
 
     @app.get("/api/submissions/{submission_id}")
-    async def get_submission(submission_id: str) -> dict:
+    async def get_submission(request: Request, submission_id: str):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
         submission = await submission_repository.get_submission(submission_id)
 
+        if submission.user_id != current_user.user_id and not is_admin(current_user):
+            return require_permission_response()
         if submission.status == SubmissionStatus.PENDING:
             data = {
                 "submission_id": submission.submission_id,
@@ -333,7 +354,11 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         )
 
     @app.get("/api/problems/{problem_id}")
-    async def get_problem(problem_id: Annotated[ProblemId, ApiPath()]) -> dict:
+    async def get_problem(request: Request, problem_id: Annotated[ProblemId, ApiPath()]):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
         problem = await repository.get_problem(problem_id)
         return api_response(200, "success", problem.model_dump(mode="json"))
 
@@ -395,7 +420,11 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         return api_response(200, "success", user.model_dump(mode="json"))
 
     @app.post("/api/languages/")
-    async def add_language(language: LanguageConfig) -> dict:
+    async def add_language(request: Request, language: LanguageConfig):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
         language_registry.register_language(language)
         return api_response(
             200,
@@ -406,22 +435,31 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         )
 
     @app.post("/api/problems/")
-    async def add_problem(problem: Problem) -> dict:
+    async def add_problem(request: Request, problem: Problem):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
         await repository.add_problem(problem)
         return api_response(200, "add success", {"id": problem.id})
 
     @app.post("/api/submissions/")
     async def add_submission(
+        request: Request,
         submission_create: SubmissionCreate,
         background_tasks: BackgroundTasks,
-    ) -> dict:
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
         await repository.get_problem(submission_create.problem_id)
         language_registry.get_language(submission_create.language)
-
         submission = await submission_repository.create_submission(
             problem_id=submission_create.problem_id,
             language=submission_create.language,
             code=submission_create.code,
+            user_id=current_user.user_id,
         )
 
         background_tasks.add_task(
@@ -477,9 +515,14 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
     @app.put("/api/problems/{problem_id}")
     async def update_problem(
+        request: Request,
         problem_id: Annotated[ProblemId, ApiPath()],
         problem: Problem,
     ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
         if problem_id != problem.id:
             return JSONResponse(
                 status_code=400,
@@ -491,9 +534,16 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
     @app.put("/api/submissions/{submission_id}/rejudge")
     async def rejudge_submission(
+        request: Request,
         submission_id: str,
         background_tasks: BackgroundTasks,
-    ) -> dict:
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
         submission = await submission_repository.reset_submission(submission_id)
         submission_create = submission_to_create(submission)
 
@@ -537,7 +587,14 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         )
 
     @app.delete("/api/problems/{problem_id}")
-    async def delete_problem(problem_id: Annotated[ProblemId, ApiPath()]) -> dict:
+    async def delete_problem(request: Request, problem_id: Annotated[ProblemId, ApiPath()]):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
+
         await repository.delete_problem(problem_id)
         return api_response(200, "delete success", {"id": problem_id})
 
@@ -545,4 +602,3 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
 
 app = create_app()
-

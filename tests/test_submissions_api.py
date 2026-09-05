@@ -20,6 +20,11 @@ def make_problem_payload() -> dict:
         "memory_limit": 128,
     }
 
+def login_admin(client):
+    return client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admintestpassword"},
+    )
 
 def make_client(tmp_path):
     return TestClient(create_app(tmp_path / "problems"))
@@ -27,6 +32,7 @@ def make_client(tmp_path):
 
 def test_submission_api_accepts_python_answer(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         submit_response = client.post(
@@ -53,6 +59,7 @@ def test_submission_api_accepts_python_answer(tmp_path):
 
 def test_submission_api_reports_wrong_answer(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         submit_response = client.post(
@@ -76,6 +83,7 @@ def test_submission_api_reports_wrong_answer(tmp_path):
 
 def test_submission_api_rejects_missing_problem(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.post(
             "/api/submissions/",
             json={
@@ -91,6 +99,7 @@ def test_submission_api_rejects_missing_problem(tmp_path):
 
 def test_submission_api_rejects_missing_language(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         response = client.post(
@@ -108,6 +117,7 @@ def test_submission_api_rejects_missing_language(tmp_path):
 
 def test_submission_api_rejects_missing_submission(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.get("/api/submissions/missing")
 
     assert response.status_code == 404
@@ -115,6 +125,7 @@ def test_submission_api_rejects_missing_submission(tmp_path):
 
 def test_submission_list_api_filters_by_problem_id(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         first = client.post(
@@ -148,6 +159,7 @@ def test_submission_list_api_filters_by_problem_id(tmp_path):
 
 def test_submission_list_api_filters_by_status(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         client.post(
@@ -177,6 +189,7 @@ def test_submission_list_api_filters_by_status(tmp_path):
 
 def test_submission_list_api_supports_pagination(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         for index in range(5):
@@ -199,6 +212,7 @@ def test_submission_list_api_supports_pagination(tmp_path):
 
 def test_submission_list_api_rejects_missing_primary_filter(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.get("/api/submissions/")
 
     assert response.status_code == 400
@@ -207,6 +221,7 @@ def test_submission_list_api_rejects_missing_primary_filter(tmp_path):
 
 def test_submission_list_api_rejects_page_without_page_size(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.get("/api/submissions/?problem_id=P1001&page=1")
 
     assert response.status_code == 400
@@ -214,6 +229,7 @@ def test_submission_list_api_rejects_page_without_page_size(tmp_path):
 
 def test_submission_list_api_filters_by_problem_id(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         first = client.post(
@@ -247,6 +263,7 @@ def test_submission_list_api_filters_by_problem_id(tmp_path):
 
 def test_submission_list_api_filters_by_status(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         client.post(
@@ -276,6 +293,7 @@ def test_submission_list_api_filters_by_status(tmp_path):
 
 def test_submission_list_api_supports_pagination(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         for index in range(5):
@@ -298,6 +316,7 @@ def test_submission_list_api_supports_pagination(tmp_path):
 
 def test_submission_list_api_rejects_missing_primary_filter(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.get("/api/submissions/")
 
     assert response.status_code == 400
@@ -306,6 +325,7 @@ def test_submission_list_api_rejects_missing_primary_filter(tmp_path):
 
 def test_submission_list_api_rejects_page_without_page_size(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.get("/api/submissions/?problem_id=P1001&page=1")
 
     assert response.status_code == 400
@@ -313,6 +333,7 @@ def test_submission_list_api_rejects_page_without_page_size(tmp_path):
 
 def test_rejudge_submission_api_resets_and_updates_result(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         submit_response = client.post(
@@ -346,6 +367,7 @@ def test_rejudge_submission_api_resets_and_updates_result(tmp_path):
 
 def test_rejudge_submission_api_rejects_missing_submission(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.put("/api/submissions/missing/rejudge")
 
     assert response.status_code == 404
@@ -353,6 +375,7 @@ def test_rejudge_submission_api_rejects_missing_submission(tmp_path):
 
 def test_submission_list_api_uses_first_page_when_only_page_size_is_set(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         for index in range(3):
@@ -375,6 +398,7 @@ def test_submission_list_api_uses_first_page_when_only_page_size_is_set(tmp_path
 
 def test_submission_list_api_rejects_invalid_pagination(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         page_response = client.get("/api/submissions/?problem_id=P1001&page=0&page_size=2")
         page_size_response = client.get(
             "/api/submissions/?problem_id=P1001&page=1&page_size=0"
@@ -388,6 +412,7 @@ def test_submission_list_api_rejects_invalid_pagination(tmp_path):
 
 def test_submission_list_api_rejects_invalid_status(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.get("/api/submissions/?problem_id=P1001&status=finished")
 
     assert response.status_code == 400
@@ -395,6 +420,7 @@ def test_submission_list_api_rejects_invalid_status(tmp_path):
 
 def test_submission_list_api_does_not_return_code(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
 
         client.post(

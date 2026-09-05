@@ -2,6 +2,11 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 
+def login_admin(client):
+    return client.post(
+        "/api/auth/login",
+        json={"username": "admin", "password": "admintestpassword"},
+    )
 
 def make_client(tmp_path):
     return TestClient(create_app(tmp_path / "problems"))
@@ -9,6 +14,7 @@ def make_client(tmp_path):
 
 def test_language_api_lists_default_languages(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.get("/api/languages/")
 
     assert response.status_code == 200
@@ -23,6 +29,7 @@ def test_language_api_lists_default_languages(tmp_path):
 
 def test_language_api_registers_language(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.post(
             "/api/languages/",
             json={
@@ -46,6 +53,7 @@ def test_language_api_registers_language(tmp_path):
 
 def test_language_api_rejects_duplicate_language(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.post(
             "/api/languages/",
             json={
@@ -61,6 +69,7 @@ def test_language_api_rejects_duplicate_language(tmp_path):
 
 def test_language_api_rejects_invalid_language_config(tmp_path):
     with make_client(tmp_path) as client:
+        login_admin(client)
         response = client.post(
             "/api/languages/",
             json={
