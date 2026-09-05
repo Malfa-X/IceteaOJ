@@ -17,6 +17,8 @@ from app.models import (
     UserCreate,
     UserLogin,
     UserPublic,
+    UserRole,
+    UserRoleUpdate,
 )
 from app.submission_repository import SubmissionNotFoundError, SubmissionRepository
 from app.repository import (
@@ -82,6 +84,14 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
         return await user_repository.get_user(user_id)
 
+    def require_permission_response() -> JSONResponse:
+        return JSONResponse(
+            status_code=403,
+            content=api_response(403, "permission denied"),
+        )
+
+    def is_admin(user: UserPublic) -> bool:
+        return user.role == UserRole.ADMIN
 
     def require_login_response() -> JSONResponse:
         return JSONResponse(
@@ -327,17 +337,59 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         problem = await repository.get_problem(problem_id)
         return api_response(200, "success", problem.model_dump(mode="json"))
 
+    @app.get("/api/users/")
+    async def list_users(
+        request: Request,
+        page: int | None = None,
+        page_size: int | None = None,
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
+
+        if page is not None and page_size is None:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page_size is required when page is set"),
+            )
+
+        if page is not None and page <= 0:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page must be positive"),
+            )
+
+        if page_size is not None and page_size <= 0:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "page_size must be positive"),
+            )
+
+        if page is None and page_size is not None:
+            page = 1
+
+        total, users = await user_repository.list_users(page=page, page_size=page_size)
+
+        return api_response(
+            200,
+            "success",
+            {
+                "total": total,
+                "users": [user.model_dump(mode="json") for user in users],
+            },
+        )
+
     @app.get("/api/users/{user_id}")
     async def get_user(request: Request, user_id: str):
         current_user = await get_current_user(request)
         if current_user is None:
             return require_login_response()
 
-        if current_user.user_id != user_id:
-            return JSONResponse(
-                status_code=403,
-                content=api_response(403, "permission denied"),
-            )
+        if current_user.user_id != user_id and not is_admin(current_user):
+            return require_permission_response()
 
         user = await user_repository.get_user(user_id)
         return api_response(200, "success", user.model_dump(mode="json"))
@@ -457,6 +509,30 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             {
                 "submission_id": submission.submission_id,
                 "status": submission.status,
+            },
+        )
+
+    @app.put("/api/users/{user_id}/role")
+    async def update_user_role(
+        request: Request,
+        user_id: str,
+        role_update: UserRoleUpdate,
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
+
+        user = await user_repository.update_role(user_id, role_update.role)
+
+        return api_response(
+            200,
+            "role updated",
+            {
+                "user_id": user.user_id,
+                "role": user.role,
             },
         )
 

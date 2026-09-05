@@ -144,3 +144,110 @@ def test_get_user_requires_login(tmp_path):
 
     assert response.status_code == 401
     assert response.json()["msg"] == "not logged in"
+
+def test_admin_can_query_any_user(tmp_path):
+    with make_client(tmp_path) as client:
+        bob = client.post(
+            "/api/users/",
+            json={"username": "bobby", "password": "password123"},
+        ).json()["data"]
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "admin", "password": "admintestpassword"},
+        )
+
+        response = client.get(f"/api/users/{bob['user_id']}")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["username"] == "bobby"
+
+
+def test_admin_can_list_users(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/users/", json={"username": "alice", "password": "password123"})
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "admin", "password": "admintestpassword"},
+        )
+
+        response = client.get("/api/users/")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["total"] == 2
+    assert [user["username"] for user in data["users"]] == ["admin", "alice"]
+    assert "password_hash" not in data["users"][0]
+
+
+def test_user_list_requires_admin(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/users/", json={"username": "alice", "password": "password123"})
+        client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "password123"},
+        )
+
+        response = client.get("/api/users/")
+
+    assert response.status_code == 403
+    assert response.json()["msg"] == "permission denied"
+
+
+def test_admin_can_update_user_role_and_banned_user_cannot_login(tmp_path):
+    with make_client(tmp_path) as client:
+        alice = client.post(
+            "/api/users/",
+            json={"username": "alice", "password": "password123"},
+        ).json()["data"]
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "admin", "password": "admintestpassword"},
+        )
+
+        update_response = client.put(
+            f"/api/users/{alice['user_id']}/role",
+            json={"role": "banned"},
+        )
+        assert update_response.status_code == 200
+        assert update_response.json()["data"] == {
+            "user_id": alice["user_id"],
+            "role": "banned",
+        }
+
+        client.post("/api/auth/logout")
+
+        login_response = client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "password123"},
+        )
+
+    assert login_response.status_code == 403
+    assert login_response.json()["msg"] == "user is banned"
+
+
+def test_role_update_requires_admin(tmp_path):
+    with make_client(tmp_path) as client:
+        alice = client.post(
+            "/api/users/",
+            json={"username": "alice", "password": "password123"},
+        ).json()["data"]
+        bob = client.post(
+            "/api/users/",
+            json={"username": "bobby", "password": "password123"},
+        ).json()["data"]
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "password123"},
+        )
+
+        response = client.put(
+            f"/api/users/{bob['user_id']}/role",
+            json={"role": "admin"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["msg"] == "permission denied"

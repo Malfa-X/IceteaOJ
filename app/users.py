@@ -65,6 +65,24 @@ class UserRepository:
 
             return self.to_public(self._users[user_id])
 
+    async def list_users(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> tuple[int, list[UserPublic]]:
+        async with self._lock:
+            users = [self.to_public(user) for user in self._users.values()]
+            users = sorted(users, key=lambda user: int(user.user_id))
+
+            total = len(users)
+
+            if page is not None and page_size is not None:
+                start = (page - 1) * page_size
+                end = start + page_size
+                users = users[start:end]
+
+            return total, users
+
     async def get_user_internal(self, user_id: str) -> User:
         async with self._lock:
             if user_id not in self._users:
