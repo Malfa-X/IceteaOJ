@@ -91,6 +91,7 @@ with st.sidebar:
             "Problems",
             "Submissions",
             "Logs",
+            "AI Authoring",
         ],
     )
 
@@ -580,6 +581,210 @@ elif page == "Logs":
                     st.dataframe(result.data, use_container_width=True)
                 else:
                     st.error(result.msg)
+
+elif page == "AI Authoring":
+    st.header("AI Problem Authoring")
+
+    current_user = st.session_state.get("current_user")
+    if not current_user:
+        st.info("Please login first.")
+    else:
+        config_tab, create_tab, status_tab = st.tabs(
+            ["Model Config", "Create Task", "Task Status"]
+        )
+
+        with config_tab:
+            st.subheader("Model configuration")
+            st.caption(
+                "Only administrators can change model settings. The API key is never "
+                "returned in plain text."
+            )
+
+            if current_user["role"] != "admin":
+                st.warning("Only administrators can manage AI model configuration.")
+            else:
+                if st.button("Load current AI config"):
+                    result = client.get("/api/ai/config")
+                    if result.ok:
+                        st.json(result.data)
+                    else:
+                        st.error(result.msg)
+
+                with st.form("ai_config_form"):
+                    provider_url = st.text_input(
+                        "Provider URL",
+                        value="mock://local",
+                        key="ai_provider_url",
+                    )
+                    model_name = st.text_input(
+                        "Model name",
+                        value="mock-problem-generator",
+                        key="ai_model_name",
+                    )
+                    api_key = st.text_input(
+                        "API key",
+                        value="mock-api-key",
+                        type="password",
+                        key="ai_api_key",
+                    )
+                    input_price = st.number_input(
+                        "Input price per 1K tokens",
+                        min_value=0.0,
+                        value=0.0,
+                        step=0.0001,
+                        format="%.6f",
+                        key="ai_input_price",
+                    )
+                    output_price = st.number_input(
+                        "Output price per 1K tokens",
+                        min_value=0.0,
+                        value=0.0,
+                        step=0.0001,
+                        format="%.6f",
+                        key="ai_output_price",
+                    )
+                    submitted = st.form_submit_button("Save AI config")
+
+                if submitted:
+                    result = client.put(
+                        "/api/ai/config",
+                        json={
+                            "provider_url": provider_url,
+                            "model_name": model_name,
+                            "api_key": api_key,
+                            "input_price_per_1k": input_price,
+                            "output_price_per_1k": output_price,
+                        },
+                    )
+                    if result.ok:
+                        st.success("AI config saved")
+                        st.json(result.data)
+                    else:
+                        st.error(result.msg)
+
+        with create_tab:
+            st.subheader("Create an AI problem task")
+
+            with st.form("ai_task_form"):
+                topic = st.text_input(
+                    "Topic",
+                    value="loop and arithmetic",
+                    key="ai_task_topic",
+                )
+                difficulty = st.selectbox(
+                    "Difficulty",
+                    ["easy", "medium", "hard"],
+                    key="ai_task_difficulty",
+                )
+                testcase_count = st.number_input(
+                    "Testcase count",
+                    min_value=1,
+                    max_value=20,
+                    value=5,
+                    key="ai_task_testcase_count",
+                )
+                requirements = st.text_area(
+                    "Requirements",
+                    value="Generate a beginner friendly programming problem.",
+                    height=140,
+                    key="ai_task_requirements",
+                )
+                submitted = st.form_submit_button("Start AI authoring")
+
+            if submitted:
+                result = client.post(
+                    "/api/ai/tasks/",
+                    json={
+                        "topic": topic,
+                        "difficulty": difficulty,
+                        "requirements": requirements,
+                        "testcase_count": testcase_count,
+                    },
+                )
+                if result.ok:
+                    task = result.data
+                    st.session_state.last_ai_task_id = task["task_id"]
+                    st.session_state.ai_task_data = task
+                    st.success("AI authoring task started")
+                    st.code(task["task_id"])
+                else:
+                    st.error(result.msg)
+
+        with status_tab:
+            st.subheader("Task status and generated problem")
+
+            default_task_id = st.session_state.get("last_ai_task_id", "")
+            task_id = st.text_input(
+                "AI task ID",
+                value=default_task_id,
+                key="ai_status_task_id",
+            )
+
+            status_col, cancel_col, apply_col = st.columns(3)
+            with status_col:
+                if st.button("Refresh AI task"):
+                    result = client.get(f"/api/ai/tasks/{task_id}")
+                    if result.ok:
+                        st.session_state.last_ai_task_id = task_id
+                        st.session_state.ai_task_data = result.data
+                    else:
+                        st.error(result.msg)
+
+            with cancel_col:
+                if st.button("Cancel AI task"):
+                    result = client.put(f"/api/ai/tasks/{task_id}/cancel")
+                    if result.ok:
+                        st.session_state.ai_task_data = result.data
+                        st.warning("AI task cancelled")
+                    else:
+                        st.error(result.msg)
+
+            with apply_col:
+                if st.button("Apply generated problem"):
+                    result = client.post(f"/api/ai/tasks/{task_id}/apply")
+                    if result.ok:
+                        st.success("Generated problem added to problem repository")
+                        st.json(result.data)
+                    else:
+                        st.error(result.msg)
+
+            task = st.session_state.get("ai_task_data")
+            if task:
+                st.metric("Status", task["status"])
+                st.progress(task["progress"] / 100)
+                st.write(task.get("message") or "")
+
+                if task.get("error_info"):
+                    st.error(task["error_info"])
+
+                usage = task.get("token_usage")
+                if usage:
+                    st.subheader("Token usage and estimated cost")
+                    usage_col1, usage_col2, usage_col3 = st.columns(3)
+                    usage_col1.metric("Input tokens", usage["input_tokens"])
+                    usage_col2.metric("Output tokens", usage["output_tokens"])
+                    usage_col3.metric(
+                        "Total cost",
+                        f"{usage['total_cost']} {usage['currency']}",
+                    )
+                    st.caption(usage.get("pricing_note") or "")
+
+                generated_problem = task.get("result")
+                if generated_problem:
+                    st.subheader("Generated problem JSON")
+                    st.json(generated_problem)
+
+                    st.session_state.create_problem_json = json.dumps(
+                        generated_problem,
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                    st.info(
+                        "The generated JSON has also been copied into the Problems "
+                        "page create form state. You can review it there before saving."
+                    )
+            else:
+                st.info("Start a task or enter an existing AI task ID, then refresh.")
 
 else:
     st.info("This page will be implemented in the next frontend stage.")

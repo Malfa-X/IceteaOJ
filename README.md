@@ -2,7 +2,7 @@
 
 IceteaOJ 是程序设计训练 Python 实验二的在线判题系统示例项目。
 
-项目后端使用 FastAPI，前端使用 Streamlit。当前版本已经覆盖题目管理、语言配置、提交判题、用户登录与权限、提交日志和前端操作页面。
+项目后端使用 FastAPI，前端使用 Streamlit。当前版本已经覆盖题目管理、语言配置、提交判题、用户登录与权限、提交日志、前端操作页面和 Advance AI 智能命题模块。
 
 ## 功能概览
 
@@ -12,6 +12,7 @@ IceteaOJ 是程序设计训练 Python 实验二的在线判题系统示例项目
 - 判题系统：支持 Python 和 C++ 提交，返回 AC、WA、RE、TLE、MLE、CE 等结果
 - 提交管理：创建提交、查询提交列表、查看提交详情、重新判题
 - 日志系统：查看提交测试点日志、配置公开测试点、管理员查看访问审计
+- AI 智能命题：配置模型、创建命题任务、查看进度、中断任务、统计 token 与费用、导入生成题目
 - 前端页面：通过 Streamlit 操作主要后端功能
 
 ## 环境安装
@@ -69,6 +70,41 @@ password: admintestpassword
 
 管理员可以管理题目、用户角色、日志可见性和访问审计。
 
+## AI 智能命题模块
+
+项目包含实验二 Advance 要求的 AI 智能命题功能。
+
+后端接口位于：
+
+```text
+/api/ai/config
+/api/ai/tasks/
+/api/ai/tasks/{task_id}
+/api/ai/tasks/{task_id}/cancel
+/api/ai/tasks/{task_id}/apply
+```
+
+前端入口位于 Streamlit 侧边栏的 `AI Authoring` 页面。
+
+当前默认使用本地模拟 provider：
+
+```text
+provider_url: mock://local
+model_name: mock-problem-generator
+api_key: mock-api-key
+```
+
+因此演示时不需要真实 API key。管理员仍然可以在页面中配置 provider URL、model name、API key 和输入/输出 token 单价。后端返回配置时会对 API key 脱敏，避免明文泄露。
+
+AI 命题任务支持：
+
+- 命题需求输入：知识点、难度、额外要求、测试点数量
+- 任务状态查看：pending、running、success、failed、cancelled
+- 进度展示：0 到 100 的任务进度
+- 中断接口：可取消未完成任务
+- Token 与费用统计：基于字符数估算 token，并按配置单价计算费用
+- 题目导入：管理员可以将生成的题目保存到题目仓库
+
 ## 运行测试
 
 ```bash
@@ -89,6 +125,7 @@ app/
   languages.py             判题语言注册表
   judge.py                 判题执行逻辑
   logs.py                  提交日志和访问审计
+  ai_authoring.py          AI 智能命题配置、任务和模拟生成器
 
 frontend/
   app.py                   Streamlit 前端页面

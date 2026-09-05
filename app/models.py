@@ -190,3 +190,64 @@ class AccessLog(BaseModel):
     action: str = "view_logs"
     time: str
     status: str
+
+
+class AiProblemTaskStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AiModelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider_url: str = Field(min_length=1)
+    model_name: str = Field(min_length=1)
+    api_key: str = Field(min_length=1)
+    input_price_per_1k: float = Field(default=0.0, ge=0)
+    output_price_per_1k: float = Field(default=0.0, ge=0)
+
+
+class AiModelConfigPublic(BaseModel):
+    provider_url: str
+    model_name: str
+    api_key: str
+    input_price_per_1k: float
+    output_price_per_1k: float
+
+
+class AiProblemRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    topic: str = Field(min_length=1)
+    difficulty: str = Field(min_length=1)
+    requirements: str = ""
+    testcase_count: int = Field(default=5, ge=1, le=20)
+
+
+class AiTokenUsage(BaseModel):
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    input_cost: float = Field(default=0.0, ge=0)
+    output_cost: float = Field(default=0.0, ge=0)
+    total_cost: float = Field(default=0.0, ge=0)
+    currency: str = "USD"
+    pricing_note: str = ""
+
+
+class AiProblemTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
+    user_id: str
+    request: AiProblemRequest
+    status: AiProblemTaskStatus = AiProblemTaskStatus.PENDING
+    progress: int = Field(default=0, ge=0, le=100)
+    message: str = ""
+    result: Problem | None = None
+    token_usage: AiTokenUsage = Field(default_factory=AiTokenUsage)
+    error_info: str = ""
+    created_at: str
+    updated_at: str

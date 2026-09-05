@@ -1,0 +1,287 @@
+import asyncio
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from app.models import (
+    AiModelConfig,
+    AiModelConfigPublic,
+    AiProblemRequest,
+    AiProblemTask,
+    AiProblemTaskStatus,
+    AiTokenUsage,
+    Problem,
+    TestCase,
+)
+
+
+class AiModelConfigNotFoundError(Exception):
+    pass
+
+
+class AiProblemTaskNotFoundError(Exception):
+    pass
+
+
+class AiModelConfigRepository:
+    def __init__(self):
+        self._config: AiModelConfig | None = AiModelConfig(
+            provider_url="mock://local",
+            model_name="mock-problem-generator",
+            api_key="mock-api-key",
+            input_price_per_1k=0.0,
+            output_price_per_1k=0.0,
+        )
+
+    async def set_config(self, config: AiModelConfig) -> AiModelConfigPublic:
+        self._config = config
+        return self.public_config()
+
+    async def get_config(self) -> AiModelConfig:
+        if self._config is None:
+            raise AiModelConfigNotFoundError()
+
+        return self._config
+
+    def public_config(self) -> AiModelConfigPublic:
+        if self._config is None:
+            raise AiModelConfigNotFoundError()
+
+        return AiModelConfigPublic(
+            provider_url=self._config.provider_url,
+            model_name=self._config.model_name,
+            api_key=mask_api_key(self._config.api_key),
+            input_price_per_1k=self._config.input_price_per_1k,
+            output_price_per_1k=self._config.output_price_per_1k,
+        )
+
+
+class AiProblemTaskRepository:
+    def __init__(self):
+        self._tasks: dict[str, AiProblemTask] = {}
+
+    async def create_task(
+        self,
+        user_id: str,
+        request: AiProblemRequest,
+    ) -> AiProblemTask:
+        now = current_time()
+        task = AiProblemTask(
+            task_id=uuid4().hex,
+            user_id=user_id,
+            request=request,
+            created_at=now,
+            updated_at=now,
+        )
+        self._tasks[task.task_id] = task
+        return task
+
+    async def get_task(self, task_id: str) -> AiProblemTask:
+        if task_id not in self._tasks:
+            raise AiProblemTaskNotFoundError(task_id)
+
+        return self._tasks[task_id]
+
+    async def update_progress(
+        self,
+        task_id: str,
+        status: AiProblemTaskStatus,
+        progress: int,
+        message: str,
+    ) -> AiProblemTask:
+        task = await self.get_task(task_id)
+        updated = task.model_copy(
+            update={
+                "status": status,
+                "progress": progress,
+                "message": message,
+                "updated_at": current_time(),
+            }
+        )
+        self._tasks[task_id] = updated
+        return updated
+
+    async def finish_task(
+        self,
+        task_id: str,
+        result: Problem,
+        token_usage: AiTokenUsage,
+    ) -> AiProblemTask:
+        task = await self.get_task(task_id)
+        updated = task.model_copy(
+            update={
+                "status": AiProblemTaskStatus.SUCCESS,
+                "progress": 100,
+                "message": "problem generated",
+                "result": result,
+                "token_usage": token_usage,
+                "updated_at": current_time(),
+            }
+        )
+        self._tasks[task_id] = updated
+        return updated
+
+    async def fail_task(self, task_id: str, error_info: str) -> AiProblemTask:
+        task = await self.get_task(task_id)
+        updated = task.model_copy(
+            update={
+                "status": AiProblemTaskStatus.FAILED,
+                "message": "problem generation failed",
+                "error_info": error_info,
+                "updated_at": current_time(),
+            }
+        )
+        self._tasks[task_id] = updated
+        return updated
+
+    async def cancel_task(self, task_id: str) -> AiProblemTask:
+        task = await self.get_task(task_id)
+        updated = task.model_copy(
+            update={
+                "status": AiProblemTaskStatus.CANCELLED,
+                "message": "problem generation cancelled",
+                "updated_at": current_time(),
+            }
+        )
+        self._tasks[task_id] = updated
+        return updated
+
+    async def is_cancelled(self, task_id: str) -> bool:
+        task = await self.get_task(task_id)
+        return task.status == AiProblemTaskStatus.CANCELLED
+
+
+async def generate_problem_task(
+    task_id: str,
+    task_repository: AiProblemTaskRepository,
+    config_repository: AiModelConfigRepository,
+) -> None:
+    try:
+        task = await task_repository.get_task(task_id)
+        config = await config_repository.get_config()
+
+        progress_steps = [
+            (10, "reading authoring requirements"),
+            (30, "building generation prompt"),
+            (55, "generating problem statement"),
+            (75, "generating test cases"),
+            (90, "calculating token usage and price"),
+        ]
+
+        for progress, message in progress_steps:
+            if await task_repository.is_cancelled(task_id):
+                return
+
+            await task_repository.update_progress(
+                task_id,
+                AiProblemTaskStatus.RUNNING,
+                progress,
+                message,
+            )
+            await asyncio.sleep(0.01)
+
+        if await task_repository.is_cancelled(task_id):
+            return
+
+        result = generate_mock_problem(task, config)
+        usage = calculate_token_usage(task.request, result, config)
+        await task_repository.finish_task(task_id, result, usage)
+    except Exception as error:
+        await task_repository.fail_task(
+            task_id,
+            f"{type(error).__name__}: {error}",
+        )
+
+
+def generate_mock_problem(task: AiProblemTask, config: AiModelConfig) -> Problem:
+    request = task.request
+    problem_id = f"AI_{task.task_id[:8].upper()}"
+    topic = request.topic.strip()
+    difficulty = request.difficulty.strip()
+
+    testcases = build_sum_testcases(request.testcase_count)
+
+    return Problem(
+        id=problem_id,
+        title=f"AI Generated {topic.title()} Practice",
+        description=(
+            f"This problem is generated for the topic '{topic}'. "
+            "Given two integers a and b, calculate their sum. "
+            f"Additional requirement: {request.requirements or 'basic practice'}."
+        ),
+        input_description="The input contains two integers a and b.",
+        output_description="Output one integer, the value of a + b.",
+        samples=[testcases[0]],
+        constraints="-10^9 <= a, b <= 10^9",
+        testcases=testcases,
+        hint="Use integer input parsing and addition.",
+        source=f"AI generated by {config.model_name} via {config.provider_url}",
+        tags=["ai-generated", topic, difficulty],
+        time_limit=1.0,
+        memory_limit=128,
+        author=task.user_id,
+        difficulty=difficulty,
+        public_cases=False,
+    )
+
+
+def build_sum_testcases(testcase_count: int) -> list[TestCase]:
+    seeds = [
+        (1, 2),
+        (-1, 4),
+        (0, 0),
+        (1000000000, -1),
+        (-5, -7),
+        (123, 456),
+        (-1000000000, 1000000000),
+        (42, 58),
+        (999, 1),
+        (-30, 12),
+    ]
+    cases = []
+
+    for index in range(testcase_count):
+        a, b = seeds[index % len(seeds)]
+        cases.append(TestCase(input=f"{a} {b}", output=str(a + b)))
+
+    return cases
+
+
+def calculate_token_usage(
+    request: AiProblemRequest,
+    problem: Problem,
+    config: AiModelConfig,
+) -> AiTokenUsage:
+    request_text = request.model_dump_json()
+    result_text = problem.model_dump_json()
+    input_tokens = estimate_tokens(request_text)
+    output_tokens = estimate_tokens(result_text)
+    input_cost = input_tokens / 1000 * config.input_price_per_1k
+    output_cost = output_tokens / 1000 * config.output_price_per_1k
+
+    return AiTokenUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        input_cost=round(input_cost, 6),
+        output_cost=round(output_cost, 6),
+        total_cost=round(input_cost + output_cost, 6),
+        pricing_note=(
+            f"Estimated by character count / 4. "
+            f"Input price: {config.input_price_per_1k}/1K tokens; "
+            f"output price: {config.output_price_per_1k}/1K tokens."
+        ),
+    )
+
+
+def estimate_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
+
+
+def mask_api_key(api_key: str) -> str:
+    if not api_key:
+        return ""
+
+    return "********"
+
+
+def current_time() -> str:
+    return datetime.now(timezone.utc).isoformat()

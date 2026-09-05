@@ -6,9 +6,19 @@ from fastapi import BackgroundTasks, FastAPI, Path as ApiPath, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
+from app.ai_authoring import (
+    AiModelConfigNotFoundError,
+    AiModelConfigRepository,
+    AiProblemTaskNotFoundError,
+    AiProblemTaskRepository,
+    generate_problem_task,
+)
 from app.judge import judge_submission
 from app.languages import LanguageAlreadyExistsError, LanguageNotFoundError, LanguageRegistry
 from app.models import (
+    AiModelConfig,
+    AiProblemRequest,
+    AiProblemTaskStatus,
     LanguageConfig,
     LogVisibilityUpdate,
     Problem,
@@ -59,6 +69,8 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
     submission_log_repository = SubmissionLogRepository()
     access_log_repository = AccessLogRepository()
     user_repository = UserRepository()
+    ai_config_repository = AiModelConfigRepository()
+    ai_task_repository = AiProblemTaskRepository()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -295,6 +307,20 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         return JSONResponse(
             status_code=404,
             content=api_response(404, "submission log not found"),
+        )
+
+    @app.exception_handler(AiModelConfigNotFoundError)
+    async def ai_model_config_not_found_handler(_, __):
+        return JSONResponse(
+            status_code=404,
+            content=api_response(404, "AI model config not found"),
+        )
+
+    @app.exception_handler(AiProblemTaskNotFoundError)
+    async def ai_problem_task_not_found_handler(_, __):
+        return JSONResponse(
+            status_code=404,
+            content=api_response(404, "AI problem task not found"),
         )
 
     @app.get("/api/health")
@@ -562,6 +588,124 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             200,
             "success",
             [log.model_dump(mode="json") for log in logs],
+        )
+
+    @app.get("/api/ai/config")
+    async def get_ai_config(request: Request):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
+
+        config = ai_config_repository.public_config()
+        return api_response(200, "success", config.model_dump(mode="json"))
+
+    @app.put("/api/ai/config")
+    async def update_ai_config(request: Request, config: AiModelConfig):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
+
+        public_config = await ai_config_repository.set_config(config)
+        return api_response(
+            200,
+            "AI model config updated",
+            public_config.model_dump(mode="json"),
+        )
+
+    @app.post("/api/ai/tasks/")
+    async def create_ai_problem_task(
+        request: Request,
+        authoring_request: AiProblemRequest,
+        background_tasks: BackgroundTasks,
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        task = await ai_task_repository.create_task(
+            user_id=current_user.user_id,
+            request=authoring_request,
+        )
+
+        background_tasks.add_task(
+            generate_problem_task,
+            task.task_id,
+            ai_task_repository,
+            ai_config_repository,
+        )
+
+        return api_response(
+            200,
+            "AI problem task created",
+            task.model_dump(mode="json"),
+        )
+
+    @app.get("/api/ai/tasks/{task_id}")
+    async def get_ai_problem_task(request: Request, task_id: str):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        task = await ai_task_repository.get_task(task_id)
+        if task.user_id != current_user.user_id and not is_admin(current_user):
+            return require_permission_response()
+
+        return api_response(200, "success", task.model_dump(mode="json"))
+
+    @app.put("/api/ai/tasks/{task_id}/cancel")
+    async def cancel_ai_problem_task(request: Request, task_id: str):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        task = await ai_task_repository.get_task(task_id)
+        if task.user_id != current_user.user_id and not is_admin(current_user):
+            return require_permission_response()
+
+        if task.status in {
+            AiProblemTaskStatus.SUCCESS,
+            AiProblemTaskStatus.FAILED,
+            AiProblemTaskStatus.CANCELLED,
+        }:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "task already finished"),
+            )
+
+        cancelled = await ai_task_repository.cancel_task(task_id)
+        return api_response(
+            200,
+            "AI problem task cancelled",
+            cancelled.model_dump(mode="json"),
+        )
+
+    @app.post("/api/ai/tasks/{task_id}/apply")
+    async def apply_ai_problem_task(request: Request, task_id: str):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if not is_admin(current_user):
+            return require_permission_response()
+
+        task = await ai_task_repository.get_task(task_id)
+        if task.status != AiProblemTaskStatus.SUCCESS or task.result is None:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "AI problem task is not ready"),
+            )
+
+        await repository.add_problem(task.result)
+        return api_response(
+            200,
+            "AI problem applied",
+            {"id": task.result.id},
         )
 
     @app.post("/api/problems/")
