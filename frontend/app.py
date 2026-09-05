@@ -86,6 +86,7 @@ with st.sidebar:
             "Users",
             "Problems",
             "Submissions",
+            "Logs",
         ],
     )
 
@@ -423,30 +424,149 @@ elif page == "Submissions":
                 if result.ok:
                     data = result.data
                     st.session_state.last_submission_id = data["submission_id"]
+                    st.session_state.submission_detail_data = data
+                else:
+                    st.error(result.msg)
 
-                    st.metric("Status", data["status"])
+            data = st.session_state.get("submission_detail_data")
+            if data:
+                st.metric("Status", data["status"])
 
-                    if data["status"] != "pending":
-                        score_col, counts_col = st.columns(2)
-                        score_col.metric("Score", data.get("score"))
-                        counts_col.metric("Counts", data.get("counts"))
+                if data["status"] != "pending":
+                    score_col, counts_col = st.columns(2)
+                    score_col.metric("Score", data.get("score"))
+                    counts_col.metric("Counts", data.get("counts"))
 
-                        st.subheader("Compile Info")
-                        compile_info = data.get("compile_info")
-                        if compile_info is None:
-                            st.info("No compile info.")
+                    st.subheader("Compile Info")
+                    compile_info = data.get("compile_info")
+                    if compile_info is None:
+                        st.info("No compile info.")
+                    else:
+                        st.json(compile_info)
+
+                    st.subheader("Run Info")
+                    run_info = data.get("run_info")
+                    if run_info is None:
+                        st.info("No run info.")
+                    else:
+                        st.json(run_info)
+
+                    st.subheader("Error Info")
+                    st.write(data.get("error_info") or "")
+
+                    if st.button("Load submission log"):
+                        log_result = client.get(
+                            f"/api/submissions/{data['submission_id']}/log"
+                        )
+                        if log_result.ok:
+                            st.subheader("Submission Log")
+                            st.metric("Log Score", log_result.data["score"])
+                            st.metric("Log Counts", log_result.data["counts"])
+                            st.dataframe(
+                                log_result.data["details"],
+                                use_container_width=True,
+                            )
                         else:
-                            st.json(compile_info)
+                            st.error(log_result.msg)
 
-                        st.subheader("Run Info")
-                        run_info = data.get("run_info")
-                        if run_info is None:
-                            st.info("No run info.")
-                        else:
-                            st.json(run_info)
+elif page == "Logs":
+    st.header("Logs")
 
-                        st.subheader("Error Info")
-                        st.write(data.get("error_info") or "")
+    current_user = st.session_state.get("current_user")
+    if not current_user:
+        st.info("Please login first.")
+    else:
+        submission_log_tab, visibility_tab, access_log_tab = st.tabs(
+            ["Submission Log", "Log Visibility", "Access Audit"]
+        )
+
+        with submission_log_tab:
+            st.subheader("View submission judge log")
+            st.caption(
+                "Users can view their own logs. Other users can view logs only when "
+                "the problem has public cases enabled. Admins can view all logs."
+            )
+
+            default_submission_id = st.session_state.get("last_submission_id", "")
+            submission_id = st.text_input(
+                "Submission ID",
+                value=default_submission_id,
+                key="log_submission_id",
+            )
+
+            if st.button("Load judge log"):
+                result = client.get(f"/api/submissions/{submission_id}/log")
+                if result.ok:
+                    st.session_state.last_submission_id = submission_id
+                    st.metric("Score", result.data["score"])
+                    st.metric("Counts", result.data["counts"])
+                    st.dataframe(result.data["details"], use_container_width=True)
+                else:
+                    st.error(result.msg)
+
+        with visibility_tab:
+            st.subheader("Update problem log visibility")
+            st.caption("This action requires administrator permission.")
+
+            with st.form("log_visibility_form"):
+                problem_id = st.text_input(
+                    "Problem ID",
+                    key="visibility_problem_id",
+                )
+                public_cases = st.checkbox(
+                    "Allow other users to view this problem's submission logs",
+                    key="visibility_public_cases",
+                )
+                submitted = st.form_submit_button("Update visibility")
+
+            if submitted:
+                result = client.put(
+                    f"/api/problems/{problem_id}/log_visibility",
+                    json={"public_cases": public_cases},
+                )
+                if result.ok:
+                    st.success("Log visibility updated")
+                    st.json(result.data)
+                else:
+                    st.error(result.msg)
+
+        with access_log_tab:
+            st.subheader("Query log access records")
+            st.caption("This page is only available to administrators.")
+
+            filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
+            with filter_col1:
+                user_id = st.text_input("User ID", key="access_log_user_id")
+            with filter_col2:
+                problem_id = st.text_input("Problem ID", key="access_log_problem_id")
+            with filter_col3:
+                page_number = st.number_input(
+                    "Page",
+                    min_value=1,
+                    value=1,
+                    key="access_log_page",
+                )
+            with filter_col4:
+                page_size = st.number_input(
+                    "Page size",
+                    min_value=1,
+                    value=20,
+                    key="access_log_page_size",
+                )
+
+            if st.button("Load access logs"):
+                params = {
+                    "page": page_number,
+                    "page_size": page_size,
+                }
+                if user_id:
+                    params["user_id"] = user_id
+                if problem_id:
+                    params["problem_id"] = problem_id
+
+                result = client.get("/api/logs/access/", params=params)
+                if result.ok:
+                    st.dataframe(result.data, use_container_width=True)
                 else:
                     st.error(result.msg)
 
