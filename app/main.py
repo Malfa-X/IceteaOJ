@@ -19,6 +19,7 @@ from app.models import (
     UserPublic,
     UserRole,
     UserRoleUpdate,
+    SubmissionLog,
 )
 from app.submission_repository import SubmissionNotFoundError, SubmissionRepository
 from app.repository import (
@@ -34,6 +35,7 @@ from app.users import (
     UserNotFoundError,
     UserRepository,
 )
+from app.logs import SubmissionLogRepository
 
 def api_response(code: int, msg: str, data: object | None = None) -> dict:
     return {
@@ -48,6 +50,9 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
     language_registry = LanguageRegistry()
     submission_repository = SubmissionRepository()
     user_repository = UserRepository()
+    submission_repository = SubmissionRepository()
+    submission_log_repository = SubmissionLogRepository()
+    user_repository = UserRepository()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -60,6 +65,18 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             problem = await repository.get_problem(submission_create.problem_id)
             language = language_registry.get_language(submission_create.language)
             result = await judge_submission(problem, submission_create, language)
+            submission = await submission_repository.get_submission(submission_id)
+
+            await submission_log_repository.save_log(
+                SubmissionLog(
+                    submission_id=submission_id,
+                    problem_id=submission.problem_id,
+                    user_id=submission.user_id,
+                    details=result.details,
+                    score=result.score,
+                    counts=result.counts,
+                )
+            )
 
             await submission_repository.finish_submission(
                 submission_id=submission_id,
