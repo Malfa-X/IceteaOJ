@@ -117,3 +117,22 @@ class SubmissionRepository:
                 submissions = submissions[start:end]
 
             return total, submissions
+
+    async def reset_submission(self, submission_id: str) -> Submission:
+        async with self._lock:
+            if submission_id not in self._submissions:
+                raise SubmissionNotFoundError(submission_id)
+
+            old_submission = self._submissions[submission_id]
+            new_submission = old_submission.model_copy(
+                update={
+                    "status": SubmissionStatus.PENDING,
+                    "score": None,
+                    "counts": None,
+                    "compile_info": None,
+                    "run_info": None,
+                    "error_info": None,
+                }
+            )
+            self._submissions[submission_id] = new_submission
+            return new_submission

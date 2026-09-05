@@ -58,6 +58,13 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
                 error_info="judge task failed",
             )
 
+    def submission_to_create(submission) -> SubmissionCreate:
+        return SubmissionCreate(
+            problem_id=submission.problem_id,
+            language=submission.language,
+            code=submission.code,
+        )
+
     def validate_submission_list_params(
         user_id: str | None,
         problem_id: str | None,
@@ -308,6 +315,29 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
         await repository.update_problem(problem_id, problem)
         return api_response(200, "update success", {"id": problem.id})
+
+    @app.put("/api/submissions/{submission_id}/rejudge")
+    async def rejudge_submission(
+        submission_id: str,
+        background_tasks: BackgroundTasks,
+    ) -> dict:
+        submission = await submission_repository.reset_submission(submission_id)
+        submission_create = submission_to_create(submission)
+
+        background_tasks.add_task(
+            run_judge_task,
+            submission.submission_id,
+            submission_create,
+        )
+
+        return api_response(
+            200,
+            "rejudge started",
+            {
+                "submission_id": submission.submission_id,
+                "status": submission.status,
+            },
+        )
 
     @app.delete("/api/problems/{problem_id}")
     async def delete_problem(problem_id: Annotated[ProblemId, ApiPath()]) -> dict:

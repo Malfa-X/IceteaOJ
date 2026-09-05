@@ -310,3 +310,43 @@ def test_submission_list_api_rejects_page_without_page_size(tmp_path):
 
     assert response.status_code == 400
     assert response.json()["msg"] == "page_size is required when page is set"
+
+def test_rejudge_submission_api_resets_and_updates_result(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/problems/", json=make_problem_payload())
+
+        submit_response = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print(0)",
+            },
+        )
+        submission_id = submit_response.json()["data"]["submission_id"]
+
+        before_rejudge = client.get(f"/api/submissions/{submission_id}").json()["data"]
+        assert before_rejudge["score"] == 0
+
+        rejudge_response = client.put(f"/api/submissions/{submission_id}/rejudge")
+        assert rejudge_response.status_code == 200
+        assert rejudge_response.json() == {
+            "code": 200,
+            "msg": "rejudge started",
+            "data": {
+                "submission_id": submission_id,
+                "status": "pending",
+            },
+        }
+
+        after_rejudge = client.get(f"/api/submissions/{submission_id}").json()["data"]
+        assert after_rejudge["status"] == "success"
+        assert after_rejudge["score"] == 0
+        assert after_rejudge["counts"] == 20
+
+def test_rejudge_submission_api_rejects_missing_submission(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.put("/api/submissions/missing/rejudge")
+
+    assert response.status_code == 404
+    assert response.json()["msg"] == "submission not found"
