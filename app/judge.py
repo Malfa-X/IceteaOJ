@@ -1,10 +1,13 @@
 import asyncio
-import time
-import sys
 import contextlib
-import psutil
+import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import psutil
 
 from app.models import (
     CompileInfo,
@@ -99,85 +102,88 @@ async def run_single_case(
     case_id: int,
 ) -> TestCaseResult:
     command = build_command(run_cmd, source_path, exe_path)
-    start_time = time.perf_counter()
 
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        memory_state = {"result": None, "memory": 0}
-        memory_task = asyncio.create_task(
-            monitor_memory(process, memory_limit, memory_state)
-        )
+    def run_sync() -> TestCaseResult:
+        start_time = time.perf_counter()
+        memory_state = {"result": None, "memory": 0, "stop": False}
 
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(testcase_input.encode()),
-                timeout=time_limit,
-            )
-        finally:
-            memory_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await memory_task
-
-        elapsed_time = time.perf_counter() - start_time
-
-        if memory_state["result"] == TestCaseStatus.MLE:
-            return TestCaseResult(
-                id=case_id,
-                result=TestCaseStatus.MLE,
-                time=elapsed_time,
-                memory=memory_state["memory"],
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
 
-        if process.returncode != 0:
+            memory_thread = threading.Thread(
+                target=monitor_memory_sync,
+                args=(process, memory_limit, memory_state),
+                daemon=True,
+            )
+            memory_thread.start()
+
+            try:
+                stdout, stderr = process.communicate(
+                    testcase_input.encode(),
+                    timeout=time_limit,
+                )
+            except subprocess.TimeoutExpired:
+                kill_process_tree(process)
+                process.wait()
+                elapsed_time = time.perf_counter() - start_time
+                return TestCaseResult(
+                    id=case_id,
+                    result=TestCaseStatus.TLE,
+                    time=elapsed_time,
+                    memory=0,
+                )
+            finally:
+                memory_state["stop"] = True
+                memory_thread.join(timeout=0.2)
+
+            elapsed_time = time.perf_counter() - start_time
+
+            if memory_state["result"] == TestCaseStatus.MLE:
+                return TestCaseResult(
+                    id=case_id,
+                    result=TestCaseStatus.MLE,
+                    time=elapsed_time,
+                    memory=memory_state["memory"],
+                )
+
+            if process.returncode != 0:
+                return TestCaseResult(
+                    id=case_id,
+                    result=TestCaseStatus.RE,
+                    time=elapsed_time,
+                    memory=0,
+                )
+
+            actual_output = normalize_output(stdout.decode(errors="replace"))
+            normalized_expected = normalize_output(expected_output)
+
+            if actual_output == normalized_expected:
+                result = TestCaseStatus.AC
+            else:
+                result = TestCaseStatus.WA
+
             return TestCaseResult(
                 id=case_id,
-                result=TestCaseStatus.RE,
+                result=result,
                 time=elapsed_time,
                 memory=0,
             )
 
-        actual_output = normalize_output(stdout.decode(errors="replace"))
-        normalized_expected = normalize_output(expected_output)
+        except OSError:
+            elapsed_time = time.perf_counter() - start_time
+            return TestCaseResult(
+                id=case_id,
+                result=TestCaseStatus.UNK,
+                time=elapsed_time,
+                memory=0,
+            )
 
-        if actual_output == normalized_expected:
-            result = TestCaseStatus.AC
-        else:
-            result = TestCaseStatus.WA
-
-        return TestCaseResult(
-            id=case_id,
-            result=result,
-            time=elapsed_time,
-            memory=0,
-        )
-
-    except asyncio.TimeoutError:
-        kill_process_tree(process)
-        with contextlib.suppress(ProcessLookupError):
-            await process.wait()
-
-        elapsed_time = time.perf_counter() - start_time
-        return TestCaseResult(
-            id=case_id,
-            result=TestCaseStatus.TLE,
-            time=elapsed_time,
-            memory=0,
-        )
-    
-    except OSError:
-        elapsed_time = time.perf_counter() - start_time
-        return TestCaseResult(
-            id=case_id,
-            result=TestCaseStatus.UNK,
-            time=elapsed_time,
-            memory=0,
-        )
+    return await asyncio.to_thread(run_sync)
 
 async def compile_source(
     compile_cmd: str,
@@ -187,32 +193,29 @@ async def compile_source(
 ) -> CompileInfo:
     command = build_command(compile_cmd, source_path, exe_path)
 
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+    def compile_sync() -> CompileInfo:
+        try:
+            completed = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=time_limit,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return CompileInfo(result="error", message="compile timeout")
+        except OSError as error:
+            return CompileInfo(result="error", message=str(error))
 
-        _, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=time_limit,
-        )
-
-        if process.returncode == 0:
+        if completed.returncode == 0:
             return CompileInfo(result="success", message="")
 
         return CompileInfo(
             result="error",
-            message=stderr.decode(errors="replace")[:2000],
+            message=completed.stderr.decode(errors="replace")[:2000],
         )
 
-    except asyncio.TimeoutError:
-        process.kill()
-        await process.wait()
-        return CompileInfo(result="error", message="compile timeout")
-    except OSError as error:
-        return CompileInfo(result="error", message=str(error))
+    return await asyncio.to_thread(compile_sync)
 
 
 def executable_name(name: str) -> str:
@@ -259,3 +262,28 @@ def kill_process_tree(process) -> None:
 
     with contextlib.suppress(ProcessLookupError):
         process.kill()
+
+
+def monitor_memory_sync(process, memory_limit: int, state: dict) -> None:
+    try:
+        parent = psutil.Process(process.pid)
+
+        while process.poll() is None and not state["stop"]:
+            processes = [parent] + parent.children(recursive=True)
+            memory = 0
+
+            for child in processes:
+                with contextlib.suppress(psutil.Error):
+                    memory += child.memory_info().rss
+
+            memory_mb = memory / 1024 / 1024
+            state["memory"] = max(state.get("memory", 0), int(memory_mb))
+
+            if memory_mb > memory_limit:
+                state["result"] = TestCaseStatus.MLE
+                kill_process_tree(process)
+                return
+
+            time.sleep(0.02)
+    except psutil.Error:
+        return

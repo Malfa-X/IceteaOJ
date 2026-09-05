@@ -47,6 +47,20 @@ def default_problem_payload() -> dict:
         "public_cases": False,
     }
 
+def default_code_template(language: str) -> str:
+    if language == "cpp":
+        return """#include <iostream>
+using namespace std;
+
+int main() {
+    long long a, b;
+    cin >> a >> b;
+    cout << a + b << endl;
+    return 0;
+}
+"""
+    return "a, b = map(int, input().split())\nprint(a + b)\n"
+
 st.set_page_config(
     page_title="IceteaOJ",
     page_icon="OJ",
@@ -315,6 +329,124 @@ elif page == "Problems":
                 if result.ok:
                     st.success("Problem deleted")
                     st.json(result.data)
+                else:
+                    st.error(result.msg)
+
+elif page == "Submissions":
+    st.header("Submissions")
+
+    current_user = st.session_state.get("current_user")
+    if not current_user:
+        st.info("Please login first.")
+    else:
+        submit_tab, list_tab, detail_tab = st.tabs(["Submit", "List", "Detail"])
+
+        with submit_tab:
+            languages_result = client.get("/api/languages/")
+            if languages_result.ok:
+                languages = languages_result.data["name"]
+            else:
+                languages = ["python"]
+                st.warning(languages_result.msg)
+
+            problem_id = st.text_input("Problem ID", key="submit_problem_id")
+            language = st.selectbox("Language", languages, key="submit_language")
+            code = st.text_area(
+                "Code",
+                value=default_code_template(language),
+                height=360,
+                key="submit_code",
+            )
+
+            if st.button("Submit code"):
+                result = client.post(
+                    "/api/submissions/",
+                    json={
+                        "problem_id": problem_id,
+                        "language": language,
+                        "code": code,
+                    },
+                )
+                if result.ok:
+                    st.success("Submission created")
+                    st.json(result.data)
+                    st.session_state.last_submission_id = result.data["submission_id"]
+                else:
+                    st.error(result.msg)
+
+        with list_tab:
+            st.subheader("Query submissions")
+
+            query_col1, query_col2, query_col3 = st.columns(3)
+            with query_col1:
+                query_problem_id = st.text_input("Problem ID", key="list_problem_id")
+            with query_col2:
+                query_status = st.selectbox(
+                    "Status",
+                    ["", "pending", "success", "error"],
+                    key="list_status",
+                )
+            with query_col3:
+                page_size = st.number_input("Page size", min_value=1, value=20)
+
+            if st.button("Load submissions"):
+                params = {
+                    "problem_id": query_problem_id,
+                    "page_size": page_size,
+                }
+                if query_status:
+                    params["status"] = query_status
+
+                result = client.get("/api/submissions/", params=params)
+                if result.ok:
+                    st.session_state.submissions_data = result.data
+                else:
+                    st.error(result.msg)
+
+            submissions_data = st.session_state.get("submissions_data")
+            if submissions_data:
+                st.caption(f"Total: {submissions_data['total']}")
+                st.dataframe(submissions_data["submissions"], use_container_width=True)
+            else:
+                st.info("Click load to fetch submissions.")
+
+        with detail_tab:
+            default_submission_id = st.session_state.get("last_submission_id", "")
+            submission_id = st.text_input(
+                "Submission ID",
+                value=default_submission_id,
+                key="detail_submission_id",
+            )
+
+            if st.button("Load submission detail"):
+                result = client.get(f"/api/submissions/{submission_id}")
+                if result.ok:
+                    data = result.data
+                    st.session_state.last_submission_id = data["submission_id"]
+
+                    st.metric("Status", data["status"])
+
+                    if data["status"] != "pending":
+                        score_col, counts_col = st.columns(2)
+                        score_col.metric("Score", data.get("score"))
+                        counts_col.metric("Counts", data.get("counts"))
+
+                        st.subheader("Compile Info")
+                        compile_info = data.get("compile_info")
+                        if compile_info is None:
+                            st.info("No compile info.")
+                        else:
+                            st.json(compile_info)
+
+                        st.subheader("Run Info")
+                        run_info = data.get("run_info")
+                        if run_info is None:
+                            st.info("No run info.")
+                        else:
+                            st.json(run_info)
+
+                        st.subheader("Error Info")
+                        st.write(data.get("error_info") or "")
                 else:
                     st.error(result.msg)
 
