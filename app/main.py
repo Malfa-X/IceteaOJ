@@ -2,13 +2,22 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import BackgroundTasks, FastAPI, Path as ApiPath
+from fastapi import BackgroundTasks, FastAPI, Path as ApiPath, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-
+from starlette.middleware.sessions import SessionMiddleware
 from app.judge import judge_submission
 from app.languages import LanguageAlreadyExistsError, LanguageNotFoundError, LanguageRegistry
-from app.models import Problem, ProblemId, SubmissionCreate, SubmissionStatus, LanguageConfig
+from app.models import (
+    LanguageConfig,
+    Problem,
+    ProblemId,
+    SubmissionCreate,
+    SubmissionStatus,
+    UserCreate,
+    UserLogin,
+    UserPublic,
+)
 from app.submission_repository import SubmissionNotFoundError, SubmissionRepository
 from app.repository import (
     ProblemAlreadyExistsError,
@@ -16,7 +25,13 @@ from app.repository import (
     ProblemRepository,
     ProblemStorageError,
 )
-
+from app.users import (
+    InvalidCredentialsError,
+    UserAlreadyExistsError,
+    UserBannedError,
+    UserNotFoundError,
+    UserRepository,
+)
 
 def api_response(code: int, msg: str, data: object | None = None) -> dict:
     return {
@@ -30,10 +45,12 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
     repository = ProblemRepository(problems_dir or Path("data/problems"))
     language_registry = LanguageRegistry()
     submission_repository = SubmissionRepository()
+    user_repository = UserRepository()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         await repository.initialize()
+        await user_repository.initialize()
         yield
 
     async def run_judge_task(submission_id: str, submission_create: SubmissionCreate):
@@ -57,6 +74,20 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
                 status=SubmissionStatus.ERROR,
                 error_info="judge task failed",
             )
+
+    async def get_current_user(request: Request) -> UserPublic | None:
+        user_id = request.session.get("user_id")
+        if user_id is None:
+            return None
+
+        return await user_repository.get_user(user_id)
+
+
+    def require_login_response() -> JSONResponse:
+        return JSONResponse(
+            status_code=401,
+            content=api_response(401, "not logged in"),
+        )
 
     def submission_to_create(submission) -> SubmissionCreate:
         return SubmissionCreate(
@@ -115,6 +146,13 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key="dev-secret-key-change-later",
+        same_site="lax",
+        https_only=False,
+    )
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_, __):
         return JSONResponse(
@@ -162,6 +200,37 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         return JSONResponse(
             status_code=409,
             content=api_response(409, "language already exists"),
+        )
+
+    @app.exception_handler(UserAlreadyExistsError)
+    async def user_exists_handler(_, __):
+        return JSONResponse(
+            status_code=400,
+            content=api_response(400, "username already exists"),
+        )
+
+
+    @app.exception_handler(UserNotFoundError)
+    async def user_not_found_handler(_, __):
+        return JSONResponse(
+            status_code=404,
+            content=api_response(404, "user not found"),
+        )
+
+
+    @app.exception_handler(InvalidCredentialsError)
+    async def invalid_credentials_handler(_, __):
+        return JSONResponse(
+            status_code=401,
+            content=api_response(401, "invalid username or password"),
+        )
+
+
+    @app.exception_handler(UserBannedError)
+    async def user_banned_handler(_, __):
+        return JSONResponse(
+            status_code=403,
+            content=api_response(403, "user is banned"),
         )
 
     @app.get("/api/health")
@@ -253,6 +322,26 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
+    @app.get("/api/problems/{problem_id}")
+    async def get_problem(problem_id: Annotated[ProblemId, ApiPath()]) -> dict:
+        problem = await repository.get_problem(problem_id)
+        return api_response(200, "success", problem.model_dump(mode="json"))
+
+    @app.get("/api/users/{user_id}")
+    async def get_user(request: Request, user_id: str):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if current_user.user_id != user_id:
+            return JSONResponse(
+                status_code=403,
+                content=api_response(403, "permission denied"),
+            )
+
+        user = await user_repository.get_user(user_id)
+        return api_response(200, "success", user.model_dump(mode="json"))
+
     @app.post("/api/languages/")
     async def add_language(language: LanguageConfig) -> dict:
         language_registry.register_language(language)
@@ -298,10 +387,41 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/api/problems/{problem_id}")
-    async def get_problem(problem_id: Annotated[ProblemId, ApiPath()]) -> dict:
-        problem = await repository.get_problem(problem_id)
-        return api_response(200, "success", problem.model_dump(mode="json"))
+    @app.post("/api/users/")
+    async def register_user(user_create: UserCreate) -> dict:
+        user = await user_repository.create_user(user_create)
+        return api_response(
+            200,
+            "register success",
+            user.model_dump(mode="json"),
+        )
+
+    @app.post("/api/auth/login")
+    async def login(request: Request, user_login: UserLogin) -> dict:
+        user = await user_repository.authenticate(
+            user_login.username,
+            user_login.password,
+        )
+        request.session["user_id"] = user.user_id
+
+        return api_response(
+            200,
+            "login success",
+            {
+                "user_id": user.user_id,
+                "username": user.username,
+                "role": user.role,
+            },
+        )
+
+    @app.post("/api/auth/logout")
+    async def logout(request: Request):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        request.session.clear()
+        return api_response(200, "logout success", None)
 
     @app.put("/api/problems/{problem_id}")
     async def update_problem(
