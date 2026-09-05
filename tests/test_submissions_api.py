@@ -437,3 +437,90 @@ def test_submission_list_api_does_not_return_code(tmp_path):
     assert response.status_code == 200
     submission = response.json()["data"]["submissions"][0]
     assert "code" not in submission
+
+def test_submission_log_api_returns_case_details(tmp_path):
+    with make_client(tmp_path) as client:
+        login_admin(client)
+        client.post("/api/problems/", json=make_problem_payload())
+
+        submit_response = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "a, b = map(int, input().split())\nprint(a + b)",
+            },
+        )
+        submission_id = submit_response.json()["data"]["submission_id"]
+
+        response = client.get(f"/api/submissions/{submission_id}/log")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["score"] == 20
+    assert data["counts"] == 20
+    assert data["details"] == [
+        {
+            "id": 1,
+            "result": "AC",
+            "time": data["details"][0]["time"],
+            "memory": data["details"][0]["memory"],
+        },
+        {
+            "id": 2,
+            "result": "AC",
+            "time": data["details"][1]["time"],
+            "memory": data["details"][1]["memory"],
+        },
+    ]
+
+
+def test_submission_log_api_requires_login(tmp_path):
+    with make_client(tmp_path) as client:
+        response = client.get("/api/submissions/1/log")
+
+    assert response.status_code == 401
+    assert response.json()["msg"] == "not logged in"
+
+
+def test_submission_log_api_rejects_missing_submission(tmp_path):
+    with make_client(tmp_path) as client:
+        login_admin(client)
+        response = client.get("/api/submissions/missing/log")
+
+    assert response.status_code == 404
+    assert response.json()["msg"] == "submission not found"
+
+
+def test_submission_log_api_rejects_other_user(tmp_path):
+    with make_client(tmp_path) as client:
+        client.post("/api/users/", json={"username": "alice", "password": "password123"})
+        client.post("/api/users/", json={"username": "bobby", "password": "password123"})
+
+        login_admin(client)
+        client.post("/api/problems/", json=make_problem_payload())
+        client.post("/api/auth/logout")
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "alice", "password": "password123"},
+        )
+        submit_response = client.post(
+            "/api/submissions/",
+            json={
+                "problem_id": "P1001",
+                "language": "python",
+                "code": "print(0)",
+            },
+        )
+        submission_id = submit_response.json()["data"]["submission_id"]
+        client.post("/api/auth/logout")
+
+        client.post(
+            "/api/auth/login",
+            json={"username": "bobby", "password": "password123"},
+        )
+        response = client.get(f"/api/submissions/{submission_id}/log")
+
+    assert response.status_code == 403
+    assert response.json()["msg"] == "permission denied"

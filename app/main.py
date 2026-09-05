@@ -35,7 +35,7 @@ from app.users import (
     UserNotFoundError,
     UserRepository,
 )
-from app.logs import SubmissionLogRepository
+from app.logs import SubmissionLogNotFoundError, SubmissionLogRepository
 
 def api_response(code: int, msg: str, data: object | None = None) -> dict:
     return {
@@ -260,6 +260,13 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             content=api_response(403, "user is banned"),
         )
 
+    @app.exception_handler(SubmissionLogNotFoundError)
+    async def submission_log_not_found_handler(_, __):
+        return JSONResponse(
+            status_code=404,
+            content=api_response(404, "submission log not found"),
+        )
+
     @app.get("/api/health")
     async def health_check() -> dict:
         return api_response(200, "success", {"status": "ok"})
@@ -321,6 +328,29 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             {
                 "total": total,
                 "submissions": data,
+            },
+        )
+
+    @app.get("/api/submissions/{submission_id}/log")
+    async def get_submission_log(request: Request, submission_id: str):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        submission = await submission_repository.get_submission(submission_id)
+
+        if submission.user_id != current_user.user_id and not is_admin(current_user):
+            return require_permission_response()
+
+        log = await submission_log_repository.get_log(submission_id)
+
+        return api_response(
+            200,
+            "success",
+            {
+                "details": [case.model_dump(mode="json") for case in log.details],
+                "score": log.score,
+                "counts": log.counts,
             },
         )
 
