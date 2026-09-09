@@ -111,10 +111,9 @@ def test_problem_api_requires_login(tmp_path):
 
 def test_problem_delete_requires_admin(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "alice", "password": "alice123"},
         )
 
         response = client.delete("/api/problems/P1001")
@@ -140,10 +139,9 @@ def test_admin_can_update_problem_log_visibility(tmp_path):
 
 def test_log_visibility_update_requires_admin(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "alice", "password": "alice123"},
         )
 
         response = client.put(

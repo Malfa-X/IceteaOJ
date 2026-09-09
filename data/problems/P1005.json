@@ -1,0 +1,47 @@
+{
+  "id": "P1005",
+  "title": "括号序列合法性",
+  "description": "给定一个只包含小括号的字符串，判断它是否是合法括号序列。合法括号序列要求任意前缀中左括号数量不少于右括号数量，并且最终左右括号数量相等。",
+  "input_description": "输入一行只包含字符 '(' 和 ')' 的字符串 s。",
+  "output_description": "如果括号序列合法，输出 Yes；否则输出 No。",
+  "samples": [
+    {
+      "input": "(()())",
+      "output": "Yes"
+    },
+    {
+      "input": "())(",
+      "output": "No"
+    }
+  ],
+  "constraints": "1 <= |s| <= 100000。",
+  "testcases": [
+    {
+      "input": "(()())",
+      "output": "Yes"
+    },
+    {
+      "input": "())(",
+      "output": "No"
+    },
+    {
+      "input": "()()",
+      "output": "Yes"
+    },
+    {
+      "input": "((())",
+      "output": "No"
+    }
+  ],
+  "hint": "用一个计数器表示当前尚未匹配的左括号数量。",
+  "source": "默认题库",
+  "tags": [
+    "字符串",
+    "栈"
+  ],
+  "time_limit": 1.0,
+  "memory_limit": 128,
+  "author": "system",
+  "difficulty": "简单",
+  "public_cases": true
+}

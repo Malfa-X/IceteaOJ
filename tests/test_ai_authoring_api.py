@@ -15,7 +15,7 @@ def login_admin(client):
     )
 
 
-def register_and_login_user(client, username: str = "alice"):
+def register_and_login_user(client, username: str = "charlie"):
     client.post(
         "/api/users/",
         json={"username": username, "password": "password123"},
@@ -28,7 +28,7 @@ def register_and_login_user(client, username: str = "alice"):
 
 def make_config_payload() -> dict:
     return {
-        "provider_url": "https://example.com/v1/chat/completions",
+        "provider_url": "https://example.com/v1/responses",
         "model_name": "example-model",
         "api_key": "secret-api-key",
         "input_price_per_1k": 0.001,
@@ -73,18 +73,27 @@ def fake_external_api_post(url, json, headers, timeout):
 
         def json(self):
             return {
-                "choices": [
-                    {"message": {"content": make_generated_problem().model_dump_json()}},
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": make_generated_problem().model_dump_json(),
+                            },
+                        ],
+                    },
                 ],
                 "usage": {
-                    "prompt_tokens": 100,
-                    "completion_tokens": 200,
+                    "input_tokens": 100,
+                    "output_tokens": 200,
                 },
             }
 
-    assert url == "https://example.com/v1/chat/completions"
-    assert json["model"] == "example-model"
-    assert headers["Authorization"] == "Bearer secret-api-key"
+    assert url == "https://example.com/v1/responses"
+    assert json["model"] == "your-model-name"
+    assert "input" in json
+    assert headers["Authorization"] == "Bearer your-api-key"
     return FakeResponse()
 
 
@@ -100,7 +109,7 @@ def test_admin_can_update_and_read_masked_ai_config(tmp_path):
 
     assert get_response.status_code == 200
     data = get_response.json()["data"]
-    assert data["provider_url"] == "https://example.com/v1/chat/completions"
+    assert data["provider_url"] == "https://example.com/v1/responses"
     assert data["model_name"] == "example-model"
     assert data["api_key"] == "********"
     assert "secret-api-key" not in get_response.text

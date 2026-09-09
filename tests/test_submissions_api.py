@@ -494,7 +494,6 @@ def test_submission_log_api_rejects_missing_submission(tmp_path):
 
 def test_submission_log_api_rejects_other_user(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
         client.post("/api/users/", json={"username": "bobby", "password": "password123"})
 
         login_admin(client)
@@ -503,7 +502,7 @@ def test_submission_log_api_rejects_other_user(tmp_path):
 
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "alice", "password": "alice123"},
         )
         submit_response = client.post(
             "/api/submissions/",
@@ -527,7 +526,6 @@ def test_submission_log_api_rejects_other_user(tmp_path):
 
 def test_public_cases_allow_other_users_to_view_submission_log(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
         client.post("/api/users/", json={"username": "bobby", "password": "password123"})
 
         login_admin(client)
@@ -537,7 +535,7 @@ def test_public_cases_allow_other_users_to_view_submission_log(tmp_path):
 
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "alice", "password": "alice123"},
         )
         submit_response = client.post(
             "/api/submissions/",
@@ -562,14 +560,13 @@ def test_public_cases_allow_other_users_to_view_submission_log(tmp_path):
 
 def test_admin_can_query_log_access_records(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
         login_admin(client)
         client.post("/api/problems/", json=make_problem_payload())
         client.post("/api/auth/logout")
 
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "alice", "password": "alice123"},
         )
         submit_response = client.post(
             "/api/submissions/",
@@ -596,7 +593,6 @@ def test_admin_can_query_log_access_records(tmp_path):
 
 def test_denied_submission_log_access_is_audited(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
         client.post("/api/users/", json={"username": "bobby", "password": "password123"})
 
         login_admin(client)
@@ -605,7 +601,7 @@ def test_denied_submission_log_access_is_audited(tmp_path):
 
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "alice", "password": "alice123"},
         )
         submit_response = client.post(
             "/api/submissions/",
@@ -644,10 +640,9 @@ def test_access_log_api_requires_login(tmp_path):
 
 def test_access_log_api_requires_admin(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "alice", "password": "alice123"},
         )
 
         response = client.get("/api/logs/access/")

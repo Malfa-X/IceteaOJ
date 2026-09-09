@@ -1,0 +1,47 @@
+{
+  "id": "P1004",
+  "title": "回文字符串判断",
+  "description": "给定一个只包含小写英文字母的字符串，判断它是否为回文串。回文串指正着读和反着读完全相同的字符串。",
+  "input_description": "输入一行字符串 s。",
+  "output_description": "如果 s 是回文串，输出 Yes；否则输出 No。",
+  "samples": [
+    {
+      "input": "level",
+      "output": "Yes"
+    },
+    {
+      "input": "codex",
+      "output": "No"
+    }
+  ],
+  "constraints": "1 <= |s| <= 100000，s 只包含小写英文字母。",
+  "testcases": [
+    {
+      "input": "level",
+      "output": "Yes"
+    },
+    {
+      "input": "codex",
+      "output": "No"
+    },
+    {
+      "input": "a",
+      "output": "Yes"
+    },
+    {
+      "input": "abba",
+      "output": "Yes"
+    }
+  ],
+  "hint": "可以比较字符串和它的反转结果。",
+  "source": "默认题库",
+  "tags": [
+    "字符串",
+    "基础"
+  ],
+  "time_limit": 1.0,
+  "memory_limit": 128,
+  "author": "system",
+  "difficulty": "简单",
+  "public_cases": true
+}

@@ -12,14 +12,14 @@ def test_register_user_api(tmp_path):
         response = client.post(
             "/api/users/",
             json={
-                "username": "alice",
+                "username": "charlie",
                 "password": "password123",
             },
         )
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["username"] == "alice"
+    assert data["username"] == "charlie"
     assert data["role"] == "user"
     assert data["submit_count"] == 0
     assert data["resolve_count"] == 0
@@ -28,19 +28,11 @@ def test_register_user_api(tmp_path):
 
 def test_login_and_logout_api(tmp_path):
     with make_client(tmp_path) as client:
-        client.post(
-            "/api/users/",
-            json={
-                "username": "alice",
-                "password": "password123",
-            },
-        )
-
         login_response = client.post(
             "/api/auth/login",
             json={
                 "username": "alice",
-                "password": "password123",
+                "password": "alice123",
             },
         )
         assert login_response.status_code == 200
@@ -53,14 +45,6 @@ def test_login_and_logout_api(tmp_path):
 
 def test_login_rejects_wrong_password(tmp_path):
     with make_client(tmp_path) as client:
-        client.post(
-            "/api/users/",
-            json={
-                "username": "alice",
-                "password": "password123",
-            },
-        )
-
         response = client.post(
             "/api/auth/login",
             json={
@@ -86,7 +70,7 @@ def test_user_can_query_self_after_login(tmp_path):
         register_response = client.post(
             "/api/users/",
             json={
-                "username": "alice",
+                "username": "charlie",
                 "password": "password123",
             },
         )
@@ -95,7 +79,7 @@ def test_user_can_query_self_after_login(tmp_path):
         client.post(
             "/api/auth/login",
             json={
-                "username": "alice",
+                "username": "charlie",
                 "password": "password123",
             },
         )
@@ -103,7 +87,7 @@ def test_user_can_query_self_after_login(tmp_path):
         response = client.get(f"/api/users/{user_id}")
 
     assert response.status_code == 200
-    assert response.json()["data"]["username"] == "alice"
+    assert response.json()["data"]["username"] == "charlie"
 
 
 def test_user_cannot_query_other_user(tmp_path):
@@ -111,7 +95,7 @@ def test_user_cannot_query_other_user(tmp_path):
         alice = client.post(
             "/api/users/",
             json={
-                "username": "alice",
+                "username": "charlie",
                 "password": "password123",
             },
         ).json()["data"]
@@ -126,7 +110,7 @@ def test_user_cannot_query_other_user(tmp_path):
         client.post(
             "/api/auth/login",
             json={
-                "username": "alice",
+                "username": "charlie",
                 "password": "password123",
             },
         )
@@ -165,7 +149,7 @@ def test_admin_can_query_any_user(tmp_path):
 
 def test_admin_can_list_users(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
+        client.post("/api/users/", json={"username": "charlie", "password": "password123"})
 
         client.post(
             "/api/auth/login",
@@ -176,17 +160,21 @@ def test_admin_can_list_users(tmp_path):
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["total"] == 2
-    assert [user["username"] for user in data["users"]] == ["admin", "alice"]
+    assert data["total"] == 4
+    assert [user["username"] for user in data["users"]] == [
+        "admin",
+        "alice",
+        "bob",
+        "charlie",
+    ]
     assert "password_hash" not in data["users"][0]
 
 
 def test_user_list_requires_admin(tmp_path):
     with make_client(tmp_path) as client:
-        client.post("/api/users/", json={"username": "alice", "password": "password123"})
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "alice", "password": "alice123"},
         )
 
         response = client.get("/api/users/")
@@ -199,7 +187,7 @@ def test_admin_can_update_user_role_and_banned_user_cannot_login(tmp_path):
     with make_client(tmp_path) as client:
         alice = client.post(
             "/api/users/",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "charlie", "password": "password123"},
         ).json()["data"]
 
         client.post(
@@ -221,7 +209,7 @@ def test_admin_can_update_user_role_and_banned_user_cannot_login(tmp_path):
 
         login_response = client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "charlie", "password": "password123"},
         )
 
     assert login_response.status_code == 403
@@ -232,7 +220,7 @@ def test_role_update_requires_admin(tmp_path):
     with make_client(tmp_path) as client:
         alice = client.post(
             "/api/users/",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "charlie", "password": "password123"},
         ).json()["data"]
         bob = client.post(
             "/api/users/",
@@ -241,7 +229,7 @@ def test_role_update_requires_admin(tmp_path):
 
         client.post(
             "/api/auth/login",
-            json={"username": "alice", "password": "password123"},
+            json={"username": "charlie", "password": "password123"},
         )
 
         response = client.put(

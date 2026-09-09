@@ -1,0 +1,39 @@
+{
+  "id": "P1003",
+  "title": "最大值查询",
+  "description": "给定 n 个整数，请输出其中的最大值。",
+  "input_description": "第一行输入一个整数 n。第二行输入 n 个整数。",
+  "output_description": "输出一个整数，表示这 n 个整数中的最大值。",
+  "samples": [
+    {
+      "input": "5\n1 9 -2 3 7",
+      "output": "9"
+    }
+  ],
+  "constraints": "1 <= n <= 1000，所有整数的绝对值不超过 10^9。",
+  "testcases": [
+    {
+      "input": "5\n1 9 -2 3 7",
+      "output": "9"
+    },
+    {
+      "input": "3\n-8 -2 -5",
+      "output": "-2"
+    },
+    {
+      "input": "1\n42",
+      "output": "42"
+    }
+  ],
+  "hint": "遍历所有数字并维护当前最大值。",
+  "source": "默认题库",
+  "tags": [
+    "数组",
+    "基础"
+  ],
+  "time_limit": 1.0,
+  "memory_limit": 128,
+  "author": "system",
+  "difficulty": "入门",
+  "public_cases": true
+}
