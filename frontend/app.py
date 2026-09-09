@@ -437,14 +437,15 @@ elif page == "Problems":
                     st.error(result.msg)
 
         with create_tab:
-            initial_text = json.dumps(
-                default_problem_payload(),
-                ensure_ascii=False,
-                indent=2,
-            )
+            if "create_problem_json" not in st.session_state:
+                st.session_state.create_problem_json = json.dumps(
+                    default_problem_payload(),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+
             problem_text = st.text_area(
                 "题目 JSON",
-                value=initial_text,
                 height=420,
                 key="create_problem_json",
             )

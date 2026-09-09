@@ -323,9 +323,14 @@ def build_authoring_messages(request: AiProblemRequest) -> list[dict[str, str]]:
             "role": "system",
             "content": (
                 "You generate programming contest problems for an online judge. "
-                "Return only one valid JSON object. Do not use markdown. "
-                "The JSON must match the given schema and include valid samples "
-                "and testcases."
+                "Return exactly one valid JSON object and nothing else. "
+                "The response must be directly parseable by Python json.loads(). "
+                "Use double quotes for every key and string value. "
+                "Put a comma between every object property and between every array item. "
+                "Do not include array indexes such as 0: or 1:. "
+                "Do not include Markdown fences, comments, explanations, or trailing text. "
+                "Before responding, verify that the complete response is valid JSON "
+                "and matches the required schema."
             ),
         },
         {
