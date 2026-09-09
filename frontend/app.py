@@ -18,23 +18,33 @@ PAGE_OPTIONS = [
 ]
 
 PAGE_LABELS = {
-    "Health": "🩺 Health",
-    "Account": "👤 Account",
-    "Users": "🛡️ Users",
-    "Problems": "📚 Problems",
-    "Submissions": "🚀 Submissions",
-    "Logs": "📋 Logs",
-    "AI Authoring": "✨ AI Authoring",
+    "Health": "🩺 健康检查",
+    "Account": "👤 账号",
+    "Users": "🛡️ 用户管理",
+    "Problems": "📚 题目管理",
+    "Submissions": "🚀 提交评测",
+    "Logs": "📋 评测日志",
+    "AI Authoring": "✨ AI 智能命题",
 }
 
 PAGE_DESCRIPTIONS = {
-    "Health": "Check whether the backend service is available.",
-    "Account": "Login, register and inspect the current user profile.",
-    "Users": "Manage users and roles with administrator permission.",
-    "Problems": "Create, review, edit and delete programming problems.",
-    "Submissions": "Submit code, query records and inspect judge results.",
-    "Logs": "Review submission logs, visibility settings and access audit records.",
-    "AI Authoring": "Generate problem drafts with configurable AI authoring tasks.",
+    "Health": "检查后端服务是否正常可用。",
+    "Account": "登录、注册并查看当前用户信息。",
+    "Users": "管理员管理用户账号与角色权限。",
+    "Problems": "创建、查看、编辑和删除编程题目。",
+    "Submissions": "提交代码、查询记录并查看评测结果。",
+    "Logs": "查看提交日志、可见性设置和访问审计记录。",
+    "AI Authoring": "通过可配置 AI 任务生成题目草稿。",
+}
+
+
+STATUS_LABELS = {
+    "pending": "等待处理",
+    "running": "运行中",
+    "success": "已完成",
+    "error": "异常",
+    "failed": "失败",
+    "cancelled": "已中断",
 }
 
 
@@ -50,7 +60,7 @@ def parse_json_text(text: str) -> tuple[dict | None, str | None]:
     try:
         return json.loads(text), None
     except json.JSONDecodeError as error:
-        return None, f"Invalid JSON: {error}"
+        return None, f"JSON 格式错误: {error}"
 
 def reset_api_client() -> None:
     st.session_state.api_client = ApiClient(st.session_state.api_base_url)
@@ -58,10 +68,10 @@ def reset_api_client() -> None:
 def default_problem_payload() -> dict:
     return {
         "id": "P1001",
-        "title": "A+B Problem",
-        "description": "Calculate a + b.",
-        "input_description": "Two integers a and b.",
-        "output_description": "The sum of a and b.",
+        "title": "A+B 问题",
+        "description": "给定两个整数 a 和 b，请计算它们的和。",
+        "input_description": "输入包含两个整数 a 和 b。",
+        "output_description": "输出一个整数，表示 a + b 的结果。",
         "samples": [{"input": "1 2", "output": "3"}],
         "constraints": "|a|, |b| <= 10^9",
         "testcases": [
@@ -70,7 +80,7 @@ def default_problem_payload() -> dict:
         ],
         "hint": "",
         "source": "",
-        "tags": ["basic"],
+        "tags": ["基础"],
         "time_limit": 1.0,
         "memory_limit": 128,
         "author": "",
@@ -208,6 +218,10 @@ def render_card(text: str) -> None:
     st.markdown(f'<div class="soft-card">{text}</div>', unsafe_allow_html=True)
 
 
+def display_status(status: str) -> str:
+    return STATUS_LABELS.get(status, status)
+
+
 st.set_page_config(
     page_title="IceteaOJ",
     page_icon="🧊",
@@ -220,7 +234,7 @@ st.markdown(
     """
     <div class="app-hero">
         <h1>🧊 IceteaOJ</h1>
-        <p>A compact online judge with problem management, submissions, logs and AI-assisted authoring.</p>
+        <p>一个集题目管理、提交评测、日志审计和 AI 智能命题于一体的轻量在线评测系统。</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -228,19 +242,19 @@ st.markdown(
 
 with st.sidebar:
     st.markdown("## 🧊 IceteaOJ")
-    st.caption("FastAPI backend + Streamlit frontend")
+    st.caption("FastAPI 后端 + Streamlit 前端")
     st.divider()
 
-    st.subheader("Backend")
+    st.subheader("后端服务")
     st.text_input(
-        "API Base URL",
+        "API 基础地址",
         key="api_base_url",
         value=DEFAULT_API_BASE_URL,
         on_change=reset_api_client,
     )
 
     selected_page_label = st.radio(
-        "Page",
+        "页面",
         [PAGE_LABELS[page] for page in PAGE_OPTIONS],
     )
     page = PAGE_OPTIONS[[PAGE_LABELS[item] for item in PAGE_OPTIONS].index(selected_page_label)]
@@ -248,26 +262,26 @@ with st.sidebar:
 client = get_api_client()
 current_user = st.session_state.get("current_user")
 if current_user:
-    st.sidebar.success(f"Logged in as {current_user['username']} ({current_user['role']})")
+    st.sidebar.success(f"已登录：{current_user['username']}（{current_user['role']}）")
 else:
-    st.sidebar.warning("Not logged in")
+    st.sidebar.warning("未登录")
 
 if page == "Health":
     render_page_header(page)
 
     metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-    metric_col1.metric("Backend", "FastAPI")
-    metric_col2.metric("Frontend", "Streamlit")
-    metric_col3.metric("Judge", "Python / C++")
-    metric_col4.metric("Advance", "AI Authoring")
+    metric_col1.metric("后端", "FastAPI")
+    metric_col2.metric("前端", "Streamlit")
+    metric_col3.metric("评测", "Python / C++")
+    metric_col4.metric("附加", "AI 智能命题")
 
     render_card(
-        "Use this page as a quick smoke test before demonstrating the full system. "
-        "If the backend responds successfully, login, problem management and judging "
-        "pages can use the same API base URL."
+        "演示完整系统前，可以先用本页快速检查后端连通性。"
+        "如果后端返回成功，登录、题目管理和评测页面就可以使用同一个 API 地址。"
+        ""
     )
 
-    if st.button("Check backend"):
+    if st.button("检查后端"):
         result = client.get("/api/health")
         if result.ok:
             st.success(result.msg)
@@ -278,13 +292,13 @@ if page == "Health":
 elif page == "Account":
     render_page_header(page)
 
-    login_tab, register_tab, profile_tab = st.tabs(["Login", "Register", "Profile"])
+    login_tab, register_tab, profile_tab = st.tabs(["登录", "注册", "个人信息"])
 
     with login_tab:
         with st.form("login_form"):
-            username = st.text_input("Username", key="login_username")
-            password = st.text_input("Password", type="password", key="login_password")
-            submitted = st.form_submit_button("Login")
+            username = st.text_input("用户名", key="login_username")
+            password = st.text_input("密码", type="password", key="login_password")
+            submitted = st.form_submit_button("登录")
 
         if submitted:
             result = client.post(
@@ -296,23 +310,23 @@ elif page == "Account":
             )
             if result.ok:
                 st.session_state.current_user = result.data
-                st.success("Login success")
+                st.success("登录成功")
             else:
                 st.error(result.msg)
 
-        if st.button("Logout"):
+        if st.button("退出登录"):
             result = client.post("/api/auth/logout")
             st.session_state.pop("current_user", None)
             if result.ok:
-                st.success("Logout success")
+                st.success("退出成功")
             else:
                 st.error(result.msg)
 
     with register_tab:
         with st.form("register_form"):
-            username = st.text_input("Username", key="register_username")
-            password = st.text_input("Password", type="password", key="register_password")
-            submitted = st.form_submit_button("Register")
+            username = st.text_input("用户名", key="register_username")
+            password = st.text_input("密码", type="password", key="register_password")
+            submitted = st.form_submit_button("注册")
 
         if submitted:
             result = client.post(
@@ -323,7 +337,7 @@ elif page == "Account":
                 },
             )
             if result.ok:
-                st.success("Register success")
+                st.success("注册成功")
                 st.json(result.data)
             else:
                 st.error(result.msg)
@@ -331,8 +345,8 @@ elif page == "Account":
     with profile_tab:
         current_user = st.session_state.get("current_user")
         if not current_user:
-            st.info("Please login first.")
-        elif st.button("Load my profile"):
+            st.info("请先登录。")
+        elif st.button("加载我的信息"):
             result = client.get(f"/api/users/{current_user['user_id']}")
             if result.ok:
                 st.json(result.data)
@@ -344,18 +358,18 @@ elif page == "Users":
 
     current_user = st.session_state.get("current_user")
     if not current_user:
-        st.info("Please login first.")
+        st.info("请先登录。")
     elif current_user["role"] != "admin":
-        st.warning("Only administrators can manage users.")
+        st.warning("只有管理员可以管理用户。")
     else:
         col1, col2 = st.columns([1, 2])
 
         with col1:
-            st.subheader("Load Users")
-            page_number = st.number_input("Page", min_value=1, value=1)
-            page_size = st.number_input("Page size", min_value=1, value=20)
+            st.subheader("加载用户")
+            page_number = st.number_input("页面", min_value=1, value=1)
+            page_size = st.number_input("每页数量", min_value=1, value=20)
 
-            if st.button("Refresh users"):
+            if st.button("刷新用户列表"):
                 result = client.get(
                     "/api/users/",
                     params={
@@ -371,16 +385,16 @@ elif page == "Users":
         with col2:
             users_data = st.session_state.get("users_data")
             if users_data:
-                st.caption(f"Total: {users_data['total']}")
+                st.caption(f"总数：{users_data['total']}")
                 st.dataframe(users_data["users"], use_container_width=True)
             else:
-                st.info("Click refresh to load users.")
+                st.info("点击刷新以加载用户。")
 
-        st.subheader("Change Role")
+        st.subheader("修改角色")
         with st.form("role_form"):
-            user_id = st.text_input("User ID")
-            role = st.selectbox("Role", ["user", "admin", "banned"])
-            submitted = st.form_submit_button("Update role")
+            user_id = st.text_input("用户 ID")
+            role = st.selectbox("角色", ["user", "admin", "banned"])
+            submitted = st.form_submit_button("更新角色")
 
         if submitted:
             result = client.put(
@@ -388,7 +402,7 @@ elif page == "Users":
                 json={"role": role},
             )
             if result.ok:
-                st.success("Role updated")
+                st.success("角色已更新")
                 st.json(result.data)
             else:
                 st.error(result.msg)
@@ -398,14 +412,14 @@ elif page == "Problems":
 
     current_user = st.session_state.get("current_user")
     if not current_user:
-        st.info("Please login first.")
+        st.info("请先登录。")
     else:
         list_tab, detail_tab, create_tab, edit_tab, delete_tab = st.tabs(
-            ["List", "Detail", "Create", "Edit", "Delete"]
+            ["列表", "详情", "创建", "编辑", "删除"]
         )
 
         with list_tab:
-            if st.button("Load problems"):
+            if st.button("加载题目列表"):
                 result = client.get("/api/problems/")
                 if result.ok:
                     st.session_state.problems_data = result.data
@@ -416,11 +430,11 @@ elif page == "Problems":
             if problems_data:
                 st.dataframe(problems_data, use_container_width=True)
             else:
-                st.info("Click load to fetch problems.")
+                st.info("点击加载以获取题目。")
 
         with detail_tab:
-            problem_id = st.text_input("Problem ID", key="detail_problem_id")
-            if st.button("Load problem detail"):
+            problem_id = st.text_input("题目 ID", key="detail_problem_id")
+            if st.button("加载题目详情"):
                 result = client.get(f"/api/problems/{problem_id}")
                 if result.ok:
                     st.json(result.data)
@@ -435,28 +449,28 @@ elif page == "Problems":
                 indent=2,
             )
             problem_text = st.text_area(
-                "Problem JSON",
+                "题目 JSON",
                 value=initial_text,
                 height=420,
                 key="create_problem_json",
             )
 
-            if st.button("Create problem"):
+            if st.button("创建题目"):
                 payload, error = parse_json_text(problem_text)
                 if error:
                     st.error(error)
                 else:
                     result = client.post("/api/problems/", json=payload)
                     if result.ok:
-                        st.success("Problem created")
+                        st.success("题目创建成功")
                         st.json(result.data)
                     else:
                         st.error(result.msg)
 
         with edit_tab:
-            problem_id = st.text_input("Problem ID", key="edit_problem_id")
+            problem_id = st.text_input("题目 ID", key="edit_problem_id")
 
-            if st.button("Load problem for editing"):
+            if st.button("加载题目用于编辑"):
                 result = client.get(f"/api/problems/{problem_id}")
                 if result.ok:
                     st.session_state.edit_problem_text_area = json.dumps(
@@ -468,34 +482,34 @@ elif page == "Problems":
                     st.error(result.msg)
 
             problem_text = st.text_area(
-                "Updated Problem JSON",
+                "更新后的题目 JSON",
                 value=json.dumps(default_problem_payload(), ensure_ascii=False, indent=2),
                 height=420,
                 key="edit_problem_text_area",
             )
 
-            if st.button("Update problem"):
+            if st.button("更新题目"):
                 payload, error = parse_json_text(problem_text)
                 if error:
                     st.error(error)
                 elif payload.get("id") != problem_id:
-                    st.error("Path problem id and JSON id must match.")
+                    st.error("路径中的题目 ID 必须和 JSON 中的 id 一致。")
                 else:
                     result = client.put(f"/api/problems/{problem_id}", json=payload)
                     if result.ok:
-                        st.success("Problem updated")
+                        st.success("题目更新成功")
                         st.json(result.data)
                     else:
                         st.error(result.msg)
 
         with delete_tab:
-            problem_id = st.text_input("Problem ID", key="delete_problem_id")
-            st.warning("Deleting a problem requires administrator permission.")
+            problem_id = st.text_input("题目 ID", key="delete_problem_id")
+            st.warning("删除题目需要管理员权限。")
 
-            if st.button("Delete problem"):
+            if st.button("删除题目"):
                 result = client.delete(f"/api/problems/{problem_id}")
                 if result.ok:
-                    st.success("Problem deleted")
+                    st.success("题目删除成功")
                     st.json(result.data)
                 else:
                     st.error(result.msg)
@@ -505,9 +519,9 @@ elif page == "Submissions":
 
     current_user = st.session_state.get("current_user")
     if not current_user:
-        st.info("Please login first.")
+        st.info("请先登录。")
     else:
-        submit_tab, list_tab, detail_tab = st.tabs(["Submit", "List", "Detail"])
+        submit_tab, list_tab, detail_tab = st.tabs(["提交", "列表", "详情"])
 
         with submit_tab:
             languages_result = client.get("/api/languages/")
@@ -517,9 +531,9 @@ elif page == "Submissions":
                 languages = ["python"]
                 st.warning(languages_result.msg)
 
-            problem_id = st.text_input("Problem ID", key="submit_problem_id")
+            problem_id = st.text_input("题目 ID", key="submit_problem_id")
             language = st.selectbox(
-                "Language",
+                "语言",
                 languages,
                 key="submit_language",
                 on_change=reset_submission_code_template,
@@ -528,12 +542,12 @@ elif page == "Submissions":
                 st.session_state.submit_code = default_code_template(language)
 
             code = st.text_area(
-                "Code",
+                "代码",
                 height=360,
                 key="submit_code",
             )
 
-            if st.button("Submit code"):
+            if st.button("提交代码"):
                 result = client.post(
                     "/api/submissions/",
                     json={
@@ -543,28 +557,28 @@ elif page == "Submissions":
                     },
                 )
                 if result.ok:
-                    st.success("Submission created")
+                    st.success("提交创建成功")
                     st.json(result.data)
                     st.session_state.last_submission_id = result.data["submission_id"]
                 else:
                     st.error(result.msg)
 
         with list_tab:
-            st.subheader("Query submissions")
+            st.subheader("查询提交记录")
 
             query_col1, query_col2, query_col3 = st.columns(3)
             with query_col1:
-                query_problem_id = st.text_input("Problem ID", key="list_problem_id")
+                query_problem_id = st.text_input("题目 ID", key="list_problem_id")
             with query_col2:
                 query_status = st.selectbox(
-                    "Status",
+                    "状态",
                     ["", "pending", "success", "error"],
                     key="list_status",
                 )
             with query_col3:
-                page_size = st.number_input("Page size", min_value=1, value=20)
+                page_size = st.number_input("每页数量", min_value=1, value=20)
 
-            if st.button("Load submissions"):
+            if st.button("加载提交记录"):
                 params = {
                     "problem_id": query_problem_id,
                     "page_size": page_size,
@@ -580,22 +594,22 @@ elif page == "Submissions":
 
             submissions_data = st.session_state.get("submissions_data")
             if submissions_data:
-                st.caption(f"Total: {submissions_data['total']}")
+                st.caption(f"总数：{submissions_data['total']}")
                 st.dataframe(submissions_data["submissions"], use_container_width=True)
             else:
-                st.info("Click load to fetch submissions.")
+                st.info("点击加载以获取提交记录。")
 
         with detail_tab:
             default_submission_id = st.session_state.get("last_submission_id", "")
             submission_id = st.text_input(
-                "Submission ID",
+                "提交 ID",
                 value=default_submission_id,
                 key="detail_submission_id",
             )
 
             detail_col, rejudge_col = st.columns(2)
             with detail_col:
-                if st.button("Load submission detail"):
+                if st.button("加载提交详情"):
                     result = client.get(f"/api/submissions/{submission_id}")
                     if result.ok:
                         data = result.data
@@ -606,57 +620,57 @@ elif page == "Submissions":
 
             with rejudge_col:
                 if current_user["role"] == "admin":
-                    if st.button("Rejudge submission"):
+                    if st.button("重新评测该提交"):
                         result = client.put(f"/api/submissions/{submission_id}/rejudge")
                         if result.ok:
-                            st.success("Rejudge started")
+                            st.success("重新评测已开始")
                             st.session_state.last_submission_id = result.data[
                                 "submission_id"
                             ]
                             st.session_state.submission_detail_data = result.data
                             st.info(
-                                "The original submission has been reset and queued. "
-                                "Click 'Load submission detail' again to refresh the result."
+                                "原提交已被重置并重新加入评测队列。"
+                                "再次点击“加载提交详情”以刷新结果。"
                             )
                         else:
                             st.error(result.msg)
                 else:
-                    st.caption("Rejudge requires administrator permission.")
+                    st.caption("重新评测需要管理员权限。")
 
             data = st.session_state.get("submission_detail_data")
             if data:
-                st.metric("Status", data["status"])
+                st.metric("状态", display_status(data["status"]))
 
                 if data["status"] != "pending":
                     score_col, counts_col = st.columns(2)
-                    score_col.metric("Score", data.get("score"))
-                    counts_col.metric("Counts", data.get("counts"))
+                    score_col.metric("得分", data.get("score"))
+                    counts_col.metric("总分", data.get("counts"))
 
-                    st.subheader("Compile Info")
+                    st.subheader("编译信息")
                     compile_info = data.get("compile_info")
                     if compile_info is None:
-                        st.info("No compile info.")
+                        st.info("暂无编译信息。")
                     else:
                         st.json(compile_info)
 
-                    st.subheader("Run Info")
+                    st.subheader("运行信息")
                     run_info = data.get("run_info")
                     if run_info is None:
-                        st.info("No run info.")
+                        st.info("暂无运行信息。")
                     else:
                         st.json(run_info)
 
-                    st.subheader("Error Info")
+                    st.subheader("错误信息")
                     st.write(data.get("error_info") or "")
 
-                    if st.button("Load submission log"):
+                    if st.button("加载提交日志"):
                         log_result = client.get(
                             f"/api/submissions/{data['submission_id']}/log"
                         )
                         if log_result.ok:
-                            st.subheader("Submission Log")
-                            st.metric("Log Score", log_result.data["score"])
-                            st.metric("Log Counts", log_result.data["counts"])
+                            st.subheader("提交日志")
+                            st.metric("日志得分", log_result.data["score"])
+                            st.metric("日志总分", log_result.data["counts"])
                             st.dataframe(
                                 log_result.data["details"],
                                 use_container_width=True,
@@ -669,50 +683,50 @@ elif page == "Logs":
 
     current_user = st.session_state.get("current_user")
     if not current_user:
-        st.info("Please login first.")
+        st.info("请先登录。")
     else:
         submission_log_tab, visibility_tab, access_log_tab = st.tabs(
-            ["Submission Log", "Log Visibility", "Access Audit"]
+            ["提交日志", "日志可见性", "访问审计"]
         )
 
         with submission_log_tab:
-            st.subheader("View submission judge log")
+            st.subheader("查看提交评测日志")
             st.caption(
-                "Users can view their own logs. Other users can view logs only when "
-                "the problem has public cases enabled. Admins can view all logs."
+                "用户可以查看自己的日志。其他用户只有在题目公开测试点时才能查看。"
+                "管理员可以查看全部日志。"
             )
 
             default_submission_id = st.session_state.get("last_submission_id", "")
             submission_id = st.text_input(
-                "Submission ID",
+                "提交 ID",
                 value=default_submission_id,
                 key="log_submission_id",
             )
 
-            if st.button("Load judge log"):
+            if st.button("加载评测日志"):
                 result = client.get(f"/api/submissions/{submission_id}/log")
                 if result.ok:
                     st.session_state.last_submission_id = submission_id
-                    st.metric("Score", result.data["score"])
-                    st.metric("Counts", result.data["counts"])
+                    st.metric("得分", result.data["score"])
+                    st.metric("总分", result.data["counts"])
                     st.dataframe(result.data["details"], use_container_width=True)
                 else:
                     st.error(result.msg)
 
         with visibility_tab:
-            st.subheader("Update problem log visibility")
-            st.caption("This action requires administrator permission.")
+            st.subheader("更新题目日志可见性")
+            st.caption("此操作需要管理员权限。")
 
             with st.form("log_visibility_form"):
                 problem_id = st.text_input(
-                    "Problem ID",
+                    "题目 ID",
                     key="visibility_problem_id",
                 )
                 public_cases = st.checkbox(
-                    "Allow other users to view this problem's submission logs",
+                    "允许其他用户查看该题目的提交日志",
                     key="visibility_public_cases",
                 )
-                submitted = st.form_submit_button("Update visibility")
+                submitted = st.form_submit_button("更新可见性")
 
             if submitted:
                 result = client.put(
@@ -720,36 +734,36 @@ elif page == "Logs":
                     json={"public_cases": public_cases},
                 )
                 if result.ok:
-                    st.success("Log visibility updated")
+                    st.success("日志可见性已更新")
                     st.json(result.data)
                 else:
                     st.error(result.msg)
 
         with access_log_tab:
-            st.subheader("Query log access records")
-            st.caption("This page is only available to administrators.")
+            st.subheader("查询日志访问记录")
+            st.caption("此页面仅管理员可用。")
 
             filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
             with filter_col1:
-                user_id = st.text_input("User ID", key="access_log_user_id")
+                user_id = st.text_input("用户 ID", key="access_log_user_id")
             with filter_col2:
-                problem_id = st.text_input("Problem ID", key="access_log_problem_id")
+                problem_id = st.text_input("题目 ID", key="access_log_problem_id")
             with filter_col3:
                 page_number = st.number_input(
-                    "Page",
+                    "页面",
                     min_value=1,
                     value=1,
                     key="access_log_page",
                 )
             with filter_col4:
                 page_size = st.number_input(
-                    "Page size",
+                    "每页数量",
                     min_value=1,
                     value=20,
                     key="access_log_page_size",
                 )
 
-            if st.button("Load access logs"):
+            if st.button("加载访问日志"):
                 params = {
                     "page": page_number,
                     "page_size": page_size,
@@ -770,40 +784,40 @@ elif page == "AI Authoring":
 
     current_user = st.session_state.get("current_user")
     if not current_user:
-        st.info("Please login first.")
+        st.info("请先登录。")
     else:
         config_tab, create_tab, status_tab = st.tabs(
-            ["Model Config", "Create Task", "Task Status"]
+            ["模型配置", "创建任务", "任务状态"]
         )
 
         with config_tab:
-            st.subheader("Model configuration")
+            st.subheader("模型配置")
             st.caption(
-                "Only administrators can change model settings. The API key is never "
-                "returned in plain text."
+                "只有管理员可以修改模型配置。API key 不会以明文返回。"
+                ""
             )
 
             if current_user["role"] != "admin":
-                st.warning("Only administrators can manage AI model configuration.")
+                st.warning("只有管理员可以管理 AI 模型配置。")
             else:
                 preset_col1, preset_col2 = st.columns(2)
                 with preset_col1:
                     st.button(
-                        "Use local Ollama qwen2.5:7b",
+                        "使用本地 Ollama qwen2.5:7b",
                         on_click=use_local_ollama_preset,
                     )
                 with preset_col2:
                     st.button(
-                        "Use ddpro.ai placeholder API",
+                        "使用 ddpro.ai 占位 API",
                         on_click=use_ddpro_placeholder_preset,
                     )
 
                 st.caption(
-                    "`ddpro.ai` is a placeholder OpenAI-compatible gateway. "
-                    "Replace its URL and API key when the real gateway is available."
+                    "`ddpro.ai` 是一个占位的 OpenAI 兼容格式中转站。"
+                    "拿到真实中转站后，替换 URL 和 API key 即可。"
                 )
 
-                if st.button("Load current AI config"):
+                if st.button("加载当前 AI 配置"):
                     result = client.get("/api/ai/config")
                     if result.ok:
                         st.json(result.data)
@@ -812,12 +826,12 @@ elif page == "AI Authoring":
 
                 with st.form("ai_config_form"):
                     provider_url = st.text_input(
-                        "Provider URL",
+                        "模型接口地址",
                         value="mock://local",
                         key="ai_provider_url",
                     )
                     model_name = st.text_input(
-                        "Model name",
+                        "模型名称",
                         value="mock-problem-generator",
                         key="ai_model_name",
                     )
@@ -828,7 +842,7 @@ elif page == "AI Authoring":
                         key="ai_api_key",
                     )
                     input_price = st.number_input(
-                        "Input price per 1K tokens",
+                        "输入每 1K token 价格",
                         min_value=0.0,
                         value=0.0,
                         step=0.0001,
@@ -836,14 +850,14 @@ elif page == "AI Authoring":
                         key="ai_input_price",
                     )
                     output_price = st.number_input(
-                        "Output price per 1K tokens",
+                        "输出每 1K token 价格",
                         min_value=0.0,
                         value=0.0,
                         step=0.0001,
                         format="%.6f",
                         key="ai_output_price",
                     )
-                    submitted = st.form_submit_button("Save AI config")
+                    submitted = st.form_submit_button("保存 AI 配置")
 
                 if submitted:
                     result = client.put(
@@ -857,39 +871,39 @@ elif page == "AI Authoring":
                         },
                     )
                     if result.ok:
-                        st.success("AI config saved")
+                        st.success("AI 配置已保存")
                         st.json(result.data)
                     else:
                         st.error(result.msg)
 
         with create_tab:
-            st.subheader("Create an AI problem task")
+            st.subheader("创建 AI 命题任务")
 
             with st.form("ai_task_form"):
                 topic = st.text_input(
-                    "Topic",
-                    value="loop and arithmetic",
+                    "知识点",
+                    value="循环与整数运算",
                     key="ai_task_topic",
                 )
                 difficulty = st.selectbox(
-                    "Difficulty",
-                    ["easy", "medium", "hard"],
+                    "难度",
+                    ["简单", "中等", "困难"],
                     key="ai_task_difficulty",
                 )
                 testcase_count = st.number_input(
-                    "Testcase count",
+                    "测试点数量",
                     min_value=1,
                     max_value=20,
                     value=5,
                     key="ai_task_testcase_count",
                 )
                 requirements = st.text_area(
-                    "Requirements",
-                    value="Generate a beginner friendly programming problem.",
+                    "命题要求",
+                    value="生成一道适合初学者练习的编程题，题面清晰，测试点包含普通情况和边界情况。",
                     height=140,
                     key="ai_task_requirements",
                 )
-                submitted = st.form_submit_button("Start AI authoring")
+                submitted = st.form_submit_button("开始 AI 命题")
 
             if submitted:
                 result = client.post(
@@ -905,24 +919,24 @@ elif page == "AI Authoring":
                     task = result.data
                     st.session_state.last_ai_task_id = task["task_id"]
                     st.session_state.ai_task_data = task
-                    st.success("AI authoring task started")
+                    st.success("AI 命题任务已开始")
                     st.code(task["task_id"])
                 else:
                     st.error(result.msg)
 
         with status_tab:
-            st.subheader("Task status and generated problem")
+            st.subheader("任务状态与生成题目")
 
             default_task_id = st.session_state.get("last_ai_task_id", "")
             task_id = st.text_input(
-                "AI task ID",
+                "AI 任务 ID",
                 value=default_task_id,
                 key="ai_status_task_id",
             )
 
             status_col, cancel_col, apply_col = st.columns(3)
             with status_col:
-                if st.button("Refresh AI task"):
+                if st.button("刷新 AI 任务"):
                     result = client.get(f"/api/ai/tasks/{task_id}")
                     if result.ok:
                         st.session_state.last_ai_task_id = task_id
@@ -931,26 +945,26 @@ elif page == "AI Authoring":
                         st.error(result.msg)
 
             with cancel_col:
-                if st.button("Cancel AI task"):
+                if st.button("中断 AI 任务"):
                     result = client.put(f"/api/ai/tasks/{task_id}/cancel")
                     if result.ok:
                         st.session_state.ai_task_data = result.data
-                        st.warning("AI task cancelled")
+                        st.warning("AI 任务已中断")
                     else:
                         st.error(result.msg)
 
             with apply_col:
-                if st.button("Apply generated problem"):
+                if st.button("导入生成题目"):
                     result = client.post(f"/api/ai/tasks/{task_id}/apply")
                     if result.ok:
-                        st.success("Generated problem added to problem repository")
+                        st.success("生成题目已加入题库")
                         st.json(result.data)
                     else:
                         st.error(result.msg)
 
             task = st.session_state.get("ai_task_data")
             if task:
-                st.metric("Status", task["status"])
+                st.metric("状态", display_status(task["status"]))
                 st.progress(task["progress"] / 100)
                 st.write(task.get("message") or "")
 
@@ -959,19 +973,19 @@ elif page == "AI Authoring":
 
                 usage = task.get("token_usage")
                 if usage:
-                    st.subheader("Token usage and estimated cost")
+                    st.subheader("Token 用量与费用估算")
                     usage_col1, usage_col2, usage_col3 = st.columns(3)
-                    usage_col1.metric("Input tokens", usage["input_tokens"])
-                    usage_col2.metric("Output tokens", usage["output_tokens"])
+                    usage_col1.metric("输入 tokens", usage["input_tokens"])
+                    usage_col2.metric("输出 tokens", usage["output_tokens"])
                     usage_col3.metric(
-                        "Total cost",
+                        "总费用",
                         f"{usage['total_cost']} {usage['currency']}",
                     )
                     st.caption(usage.get("pricing_note") or "")
 
                 generated_problem = task.get("result")
                 if generated_problem:
-                    st.subheader("Generated problem JSON")
+                    st.subheader("生成的题目 JSON")
                     st.json(generated_problem)
 
                     st.session_state.create_problem_json = json.dumps(
@@ -980,11 +994,12 @@ elif page == "AI Authoring":
                         indent=2,
                     )
                     st.info(
-                        "The generated JSON has also been copied into the Problems "
-                        "page create form state. You can review it there before saving."
+                        "生成的 JSON 也已复制到题目管理的创建表单状态中。"
+                        "你可以切到题目管理页面审阅后再保存。"
                     )
             else:
-                st.info("Start a task or enter an existing AI task ID, then refresh.")
+                st.info("请先创建任务，或输入已有 AI 任务 ID 后刷新。")
 
 else:
-    st.info("This page will be implemented in the next frontend stage.")
+    st.info("此页面将在下一阶段实现。")
+
