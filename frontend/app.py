@@ -593,14 +593,35 @@ elif page == "Submissions":
                 key="detail_submission_id",
             )
 
-            if st.button("Load submission detail"):
-                result = client.get(f"/api/submissions/{submission_id}")
-                if result.ok:
-                    data = result.data
-                    st.session_state.last_submission_id = data["submission_id"]
-                    st.session_state.submission_detail_data = data
+            detail_col, rejudge_col = st.columns(2)
+            with detail_col:
+                if st.button("Load submission detail"):
+                    result = client.get(f"/api/submissions/{submission_id}")
+                    if result.ok:
+                        data = result.data
+                        st.session_state.last_submission_id = data["submission_id"]
+                        st.session_state.submission_detail_data = data
+                    else:
+                        st.error(result.msg)
+
+            with rejudge_col:
+                if current_user["role"] == "admin":
+                    if st.button("Rejudge submission"):
+                        result = client.put(f"/api/submissions/{submission_id}/rejudge")
+                        if result.ok:
+                            st.success("Rejudge started")
+                            st.session_state.last_submission_id = result.data[
+                                "submission_id"
+                            ]
+                            st.session_state.submission_detail_data = result.data
+                            st.info(
+                                "The original submission has been reset and queued. "
+                                "Click 'Load submission detail' again to refresh the result."
+                            )
+                        else:
+                            st.error(result.msg)
                 else:
-                    st.error(result.msg)
+                    st.caption("Rejudge requires administrator permission.")
 
             data = st.session_state.get("submission_detail_data")
             if data:
