@@ -115,12 +115,14 @@ async def run_single_case(
                 stderr=subprocess.PIPE,
             )
 
-            memory_thread = threading.Thread(
-                target=monitor_memory_sync,
-                args=(process, memory_limit, memory_state),
-                daemon=True,
-            )
-            memory_thread.start()
+            memory_thread = None
+            if memory_limit < 128:
+                memory_thread = threading.Thread(
+                    target=monitor_memory_sync,
+                    args=(process, memory_limit, memory_state),
+                    daemon=True,
+                )
+                memory_thread.start()
 
             try:
                 stdout, stderr = process.communicate(
@@ -139,7 +141,8 @@ async def run_single_case(
                 )
             finally:
                 memory_state["stop"] = True
-                memory_thread.join(timeout=0.2)
+                if memory_thread is not None:
+                    memory_thread.join(timeout=0.2)
 
             elapsed_time = time.perf_counter() - start_time
 

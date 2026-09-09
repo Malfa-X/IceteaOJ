@@ -7,6 +7,37 @@ from api_client import ApiClient
 DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
 
 
+PAGE_OPTIONS = [
+    "Health",
+    "Account",
+    "Users",
+    "Problems",
+    "Submissions",
+    "Logs",
+    "AI Authoring",
+]
+
+PAGE_LABELS = {
+    "Health": "🩺 Health",
+    "Account": "👤 Account",
+    "Users": "🛡️ Users",
+    "Problems": "📚 Problems",
+    "Submissions": "🚀 Submissions",
+    "Logs": "📋 Logs",
+    "AI Authoring": "✨ AI Authoring",
+}
+
+PAGE_DESCRIPTIONS = {
+    "Health": "Check whether the backend service is available.",
+    "Account": "Login, register and inspect the current user profile.",
+    "Users": "Manage users and roles with administrator permission.",
+    "Problems": "Create, review, edit and delete programming problems.",
+    "Submissions": "Submit code, query records and inspect judge results.",
+    "Logs": "Review submission logs, visibility settings and access audit records.",
+    "AI Authoring": "Generate problem drafts with configurable AI authoring tasks.",
+}
+
+
 def get_api_client() -> ApiClient:
     if "api_client" not in st.session_state:
         st.session_state.api_client = ApiClient(
@@ -65,15 +96,141 @@ def reset_submission_code_template() -> None:
     language = st.session_state.submit_language
     st.session_state.submit_code = default_code_template(language)
 
+
+def use_local_ollama_preset() -> None:
+    st.session_state.ai_provider_url = "http://127.0.0.1:11434/api/chat"
+    st.session_state.ai_model_name = "qwen2.5:7b"
+    st.session_state.ai_api_key = "local-ollama-no-key"
+    st.session_state.ai_input_price = 0.0
+    st.session_state.ai_output_price = 0.0
+
+
+def use_ddpro_placeholder_preset() -> None:
+    st.session_state.ai_provider_url = "https://ddpro.ai/v1/chat/completions"
+    st.session_state.ai_model_name = "qwen2.5:7b"
+    st.session_state.ai_api_key = "sk-123456789"
+    st.session_state.ai_input_price = 0.0
+    st.session_state.ai_output_price = 0.0
+
+
+def apply_theme() -> None:
+    st.markdown(
+        """
+        <style>
+            .main .block-container {
+                padding-top: 2rem;
+                padding-bottom: 3rem;
+                max-width: 1180px;
+            }
+
+            [data-testid="stSidebar"] {
+                background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+            }
+
+            [data-testid="stSidebar"] * {
+                color: #e5e7eb;
+            }
+
+            [data-testid="stSidebar"] input {
+                color: #111827;
+            }
+
+            .app-hero {
+                padding: 1.6rem 1.8rem;
+                border-radius: 1.2rem;
+                background:
+                    radial-gradient(circle at top left, rgba(59, 130, 246, 0.26), transparent 30%),
+                    linear-gradient(135deg, #111827 0%, #1e3a8a 52%, #0369a1 100%);
+                color: white;
+                margin-bottom: 1.4rem;
+                box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+            }
+
+            .app-hero h1 {
+                font-size: 2.25rem;
+                margin: 0 0 0.35rem 0;
+                letter-spacing: -0.03em;
+            }
+
+            .app-hero p {
+                margin: 0;
+                color: #dbeafe;
+                font-size: 1rem;
+            }
+
+            .soft-card {
+                padding: 1rem 1.15rem;
+                border: 1px solid #e5e7eb;
+                border-radius: 1rem;
+                background: #ffffff;
+                box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+                margin-bottom: 1rem;
+            }
+
+            div[data-testid="stMetric"] {
+                background: #f8fafc;
+                border: 1px solid #e5e7eb;
+                border-radius: 0.9rem;
+                padding: 0.8rem;
+            }
+
+            .stButton > button {
+                border-radius: 0.7rem;
+                border: 1px solid #2563eb;
+                background: #2563eb;
+                color: white;
+            }
+
+            .stButton > button:hover {
+                border-color: #1d4ed8;
+                background: #1d4ed8;
+                color: white;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_page_header(page_name: str) -> None:
+    st.markdown(
+        f"""
+        <div class="app-hero">
+            <h1>{PAGE_LABELS[page_name]}</h1>
+            <p>{PAGE_DESCRIPTIONS[page_name]}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_card(text: str) -> None:
+    st.markdown(f'<div class="soft-card">{text}</div>', unsafe_allow_html=True)
+
+
 st.set_page_config(
     page_title="IceteaOJ",
-    page_icon="OJ",
+    page_icon="🧊",
     layout="wide",
 )
 
-st.title("IceteaOJ")
+apply_theme()
+
+st.markdown(
+    """
+    <div class="app-hero">
+        <h1>🧊 IceteaOJ</h1>
+        <p>A compact online judge with problem management, submissions, logs and AI-assisted authoring.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 with st.sidebar:
+    st.markdown("## 🧊 IceteaOJ")
+    st.caption("FastAPI backend + Streamlit frontend")
+    st.divider()
+
     st.subheader("Backend")
     st.text_input(
         "API Base URL",
@@ -82,18 +239,11 @@ with st.sidebar:
         on_change=reset_api_client,
     )
 
-    page = st.radio(
+    selected_page_label = st.radio(
         "Page",
-        [
-            "Health",
-            "Account",
-            "Users",
-            "Problems",
-            "Submissions",
-            "Logs",
-            "AI Authoring",
-        ],
+        [PAGE_LABELS[page] for page in PAGE_OPTIONS],
     )
+    page = PAGE_OPTIONS[[PAGE_LABELS[item] for item in PAGE_OPTIONS].index(selected_page_label)]
 
 client = get_api_client()
 current_user = st.session_state.get("current_user")
@@ -103,7 +253,19 @@ else:
     st.sidebar.warning("Not logged in")
 
 if page == "Health":
-    st.header("Health Check")
+    render_page_header(page)
+
+    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+    metric_col1.metric("Backend", "FastAPI")
+    metric_col2.metric("Frontend", "Streamlit")
+    metric_col3.metric("Judge", "Python / C++")
+    metric_col4.metric("Advance", "AI Authoring")
+
+    render_card(
+        "Use this page as a quick smoke test before demonstrating the full system. "
+        "If the backend responds successfully, login, problem management and judging "
+        "pages can use the same API base URL."
+    )
 
     if st.button("Check backend"):
         result = client.get("/api/health")
@@ -114,7 +276,7 @@ if page == "Health":
             st.error(result.msg)
 
 elif page == "Account":
-    st.header("Account")
+    render_page_header(page)
 
     login_tab, register_tab, profile_tab = st.tabs(["Login", "Register", "Profile"])
 
@@ -178,7 +340,7 @@ elif page == "Account":
                 st.error(result.msg)
 
 elif page == "Users":
-    st.header("Users")
+    render_page_header(page)
 
     current_user = st.session_state.get("current_user")
     if not current_user:
@@ -232,7 +394,7 @@ elif page == "Users":
                 st.error(result.msg)
 
 elif page == "Problems":
-    st.header("Problems")
+    render_page_header(page)
 
     current_user = st.session_state.get("current_user")
     if not current_user:
@@ -339,7 +501,7 @@ elif page == "Problems":
                     st.error(result.msg)
 
 elif page == "Submissions":
-    st.header("Submissions")
+    render_page_header(page)
 
     current_user = st.session_state.get("current_user")
     if not current_user:
@@ -482,7 +644,7 @@ elif page == "Submissions":
                             st.error(log_result.msg)
 
 elif page == "Logs":
-    st.header("Logs")
+    render_page_header(page)
 
     current_user = st.session_state.get("current_user")
     if not current_user:
@@ -583,7 +745,7 @@ elif page == "Logs":
                     st.error(result.msg)
 
 elif page == "AI Authoring":
-    st.header("AI Problem Authoring")
+    render_page_header(page)
 
     current_user = st.session_state.get("current_user")
     if not current_user:
@@ -603,6 +765,23 @@ elif page == "AI Authoring":
             if current_user["role"] != "admin":
                 st.warning("Only administrators can manage AI model configuration.")
             else:
+                preset_col1, preset_col2 = st.columns(2)
+                with preset_col1:
+                    st.button(
+                        "Use local Ollama qwen2.5:7b",
+                        on_click=use_local_ollama_preset,
+                    )
+                with preset_col2:
+                    st.button(
+                        "Use ddpro.ai placeholder API",
+                        on_click=use_ddpro_placeholder_preset,
+                    )
+
+                st.caption(
+                    "`ddpro.ai` is a placeholder OpenAI-compatible gateway. "
+                    "Replace its URL and API key when the real gateway is available."
+                )
+
                 if st.button("Load current AI config"):
                     result = client.get("/api/ai/config")
                     if result.ok:

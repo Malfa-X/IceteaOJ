@@ -1,6 +1,9 @@
 import asyncio
+import json
 from datetime import datetime, timezone
 from uuid import uuid4
+
+import requests
 
 from app.models import (
     AiModelConfig,
@@ -182,14 +185,174 @@ async def generate_problem_task(
         if await task_repository.is_cancelled(task_id):
             return
 
-        result = generate_mock_problem(task, config)
-        usage = calculate_token_usage(task.request, result, config)
+        result, usage = await generate_problem(task, config)
         await task_repository.finish_task(task_id, result, usage)
     except Exception as error:
         await task_repository.fail_task(
             task_id,
             f"{type(error).__name__}: {error}",
         )
+
+
+async def generate_problem(
+    task: AiProblemTask,
+    config: AiModelConfig,
+) -> tuple[Problem, AiTokenUsage]:
+    if config.provider_url.startswith("mock://"):
+        result = generate_mock_problem(task, config)
+        usage = calculate_token_usage(task.request, result, config)
+        return result, usage
+
+    if is_ollama_provider(config.provider_url):
+        return await asyncio.to_thread(call_ollama_provider, task, config)
+
+    return await asyncio.to_thread(call_openai_compatible_provider, task, config)
+
+
+def is_ollama_provider(provider_url: str) -> bool:
+    return "11434" in provider_url or provider_url.rstrip("/").endswith("/api/chat")
+
+
+def call_ollama_provider(
+    task: AiProblemTask,
+    config: AiModelConfig,
+) -> tuple[Problem, AiTokenUsage]:
+    payload = {
+        "model": config.model_name,
+        "stream": False,
+        "format": "json",
+        "messages": build_authoring_messages(task.request),
+    }
+    response = requests.post(
+        config.provider_url,
+        json=payload,
+        timeout=120,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    content = payload["message"]["content"]
+    problem = parse_problem_from_model_output(content, task, config)
+    usage = usage_from_counts(
+        input_tokens=payload.get("prompt_eval_count", 0),
+        output_tokens=payload.get("eval_count", 0),
+        config=config,
+        pricing_note="Local Ollama qwen2.5:7b call; token counts from Ollama response.",
+    )
+    return problem, usage
+
+
+def call_openai_compatible_provider(
+    task: AiProblemTask,
+    config: AiModelConfig,
+) -> tuple[Problem, AiTokenUsage]:
+    payload = {
+        "model": config.model_name,
+        "messages": build_authoring_messages(task.request),
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2,
+    }
+    headers = {
+        "Authorization": f"Bearer {config.api_key}",
+        "Content-Type": "application/json",
+    }
+    response = requests.post(
+        config.provider_url,
+        json=payload,
+        headers=headers,
+        timeout=120,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    content = payload["choices"][0]["message"]["content"]
+    problem = parse_problem_from_model_output(content, task, config)
+    usage_payload = payload.get("usage") or {}
+    usage = usage_from_counts(
+        input_tokens=usage_payload.get("prompt_tokens", 0),
+        output_tokens=usage_payload.get("completion_tokens", 0),
+        config=config,
+        pricing_note=(
+            "OpenAI-compatible API call; token counts from provider usage field. "
+            "If the provider omits usage, counts fall back to 0."
+        ),
+    )
+    return problem, usage
+
+
+def build_authoring_messages(request: AiProblemRequest) -> list[dict[str, str]]:
+    schema_hint = {
+        "id": "AI_CUSTOM_ID",
+        "title": "Problem title",
+        "description": "Problem statement",
+        "input_description": "Input format",
+        "output_description": "Output format",
+        "samples": [{"input": "1 2", "output": "3"}],
+        "constraints": "Constraints",
+        "testcases": [{"input": "1 2", "output": "3"}],
+        "hint": "Solution hint",
+        "source": "AI generated",
+        "tags": ["ai-generated"],
+        "time_limit": 1.0,
+        "memory_limit": 128,
+        "author": "AI",
+        "difficulty": request.difficulty,
+        "public_cases": False,
+    }
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You generate programming contest problems for an online judge. "
+                "Return only one valid JSON object. Do not use markdown. "
+                "The JSON must match the given schema and include valid samples "
+                "and testcases."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Topic: {request.topic}\n"
+                f"Difficulty: {request.difficulty}\n"
+                f"Extra requirements: {request.requirements}\n"
+                f"Testcase count: {request.testcase_count}\n"
+                f"JSON schema example: {json.dumps(schema_hint, ensure_ascii=False)}"
+            ),
+        },
+    ]
+
+
+def parse_problem_from_model_output(
+    content: str,
+    task: AiProblemTask,
+    config: AiModelConfig,
+) -> Problem:
+    data = json.loads(extract_json_object(content))
+    if "problem" in data and isinstance(data["problem"], dict):
+        data = data["problem"]
+
+    data.setdefault("id", f"AI_{task.task_id[:8].upper()}")
+    data.setdefault("source", f"AI generated by {config.model_name} via {config.provider_url}")
+    data.setdefault("author", task.user_id)
+    data.setdefault("difficulty", task.request.difficulty)
+    data.setdefault("tags", ["ai-generated", task.request.topic, task.request.difficulty])
+    data.setdefault("public_cases", False)
+    return Problem.model_validate(data)
+
+
+def extract_json_object(content: str) -> str:
+    stripped = content.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.strip("`")
+        if stripped.startswith("json"):
+            stripped = stripped[4:].strip()
+
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("model response does not contain a JSON object")
+
+    return stripped[start : end + 1]
 
 
 def generate_mock_problem(task: AiProblemTask, config: AiModelConfig) -> Problem:
@@ -269,6 +432,24 @@ def calculate_token_usage(
             f"Input price: {config.input_price_per_1k}/1K tokens; "
             f"output price: {config.output_price_per_1k}/1K tokens."
         ),
+    )
+
+
+def usage_from_counts(
+    input_tokens: int,
+    output_tokens: int,
+    config: AiModelConfig,
+    pricing_note: str,
+) -> AiTokenUsage:
+    input_cost = input_tokens / 1000 * config.input_price_per_1k
+    output_cost = output_tokens / 1000 * config.output_price_per_1k
+    return AiTokenUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        input_cost=round(input_cost, 6),
+        output_cost=round(output_cost, 6),
+        total_cost=round(input_cost + output_cost, 6),
+        pricing_note=pricing_note,
     )
 
 
