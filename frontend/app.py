@@ -304,13 +304,17 @@ elif page == "Account":
             else:
                 st.error(result.msg)
 
-        if st.button("退出登录"):
-            result = client.post("/api/auth/logout")
-            st.session_state.pop("current_user", None)
-            if result.ok:
-                st.success("退出成功")
-            else:
-                st.error(result.msg)
+        current_user = st.session_state.get("current_user")
+
+        if current_user:
+            if st.button("退出登录"):
+                result = client.post("/api/auth/logout")
+                st.session_state.pop("current_user", None)
+
+                if result.ok:
+                    st.success("退出成功")
+                else:
+                    st.error(result.msg)
 
     with register_tab:
         with st.form("register_form"):
