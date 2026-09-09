@@ -27,7 +27,7 @@ class AiProblemTaskNotFoundError(Exception):
 class AiModelConfigRepository:
     def __init__(self):
         self._config: AiModelConfig | None = AiModelConfig(
-            provider_url="https://example.com/v1/chat/completions",
+            provider_url="https://example.com/v1/responses",
             model_name="your-model-name",
             api_key="your-api-key",
             input_price_per_1k=0.0,
@@ -197,10 +197,54 @@ async def generate_problem(
     task: AiProblemTask,
     config: AiModelConfig,
 ) -> tuple[Problem, AiTokenUsage]:
-    return await asyncio.to_thread(call_openai_compatible_provider, task, config)
+    if is_responses_api(config.provider_url):
+        return await asyncio.to_thread(call_responses_api_provider, task, config)
+
+    return await asyncio.to_thread(call_chat_completions_provider, task, config)
 
 
-def call_openai_compatible_provider(
+def is_responses_api(provider_url: str) -> bool:
+    return provider_url.rstrip("/").endswith("/responses")
+
+
+def call_responses_api_provider(
+    task: AiProblemTask,
+    config: AiModelConfig,
+) -> tuple[Problem, AiTokenUsage]:
+    payload = {
+        "model": config.model_name,
+        "input": build_authoring_prompt(task.request),
+        "text": {"format": {"type": "json_object"}},
+    }
+    headers = {
+        "Authorization": f"Bearer {config.api_key}",
+        "Content-Type": "application/json",
+    }
+    response = requests.post(
+        config.provider_url,
+        json=payload,
+        headers=headers,
+        timeout=120,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    content = extract_responses_text(payload)
+    problem = parse_problem_from_model_output(content, task, config)
+    usage_payload = payload.get("usage") or {}
+    usage = usage_from_counts(
+        input_tokens=usage_payload.get("input_tokens", 0),
+        output_tokens=usage_payload.get("output_tokens", 0),
+        config=config,
+        pricing_note=(
+            "External Responses API call; token counts from provider usage field. "
+            "If the provider omits usage, counts fall back to 0."
+        ),
+    )
+    return problem, usage
+
+
+def call_chat_completions_provider(
     task: AiProblemTask,
     config: AiModelConfig,
 ) -> tuple[Problem, AiTokenUsage]:
@@ -236,6 +280,23 @@ def call_openai_compatible_provider(
         ),
     )
     return problem, usage
+
+
+def extract_responses_text(payload: dict) -> str:
+    for output_item in payload.get("output", []):
+        for content_item in output_item.get("content", []):
+            if content_item.get("type") == "output_text":
+                return content_item.get("text", "")
+
+    if "output_text" in payload:
+        return payload["output_text"]
+
+    raise ValueError("Responses API payload does not contain output_text")
+
+
+def build_authoring_prompt(request: AiProblemRequest) -> str:
+    messages = build_authoring_messages(request)
+    return "\n\n".join(message["content"] for message in messages)
 
 
 def build_authoring_messages(request: AiProblemRequest) -> list[dict[str, str]]:

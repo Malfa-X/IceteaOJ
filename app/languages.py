@@ -1,3 +1,7 @@
+"""
+配置语言
+"""
+
 from app.models import LanguageConfig
 
 
@@ -11,6 +15,7 @@ class LanguageAlreadyExistsError(Exception):
 
 class LanguageRegistry:
     def __init__(self):
+        """语言注册"""
         self._languages: dict[str, LanguageConfig] = {}
 
         self.register_language(

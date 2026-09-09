@@ -91,12 +91,12 @@ password: admintestpassword
 外部 API 配置示例：
 
 ```text
-provider_url: https://example.com/v1/chat/completions
+provider_url: https://example.com/v1/responses
 model_name: your-model-name
 api_key: your-api-key
 ```
 
-后续拿到真实中转站信息后，只需要替换 provider URL、model name 和 API key。代码按 OpenAI-compatible `/chat/completions` 响应格式解析。
+后续拿到真实中转站信息后，只需要替换 provider URL、model name 和 API key。代码优先支持 OpenAI-compatible `/responses` 响应格式，也兼容 `/chat/completions` 响应格式。
 
 管理员可以在页面中配置 provider URL、model name、API key 和输入/输出 token 单价。后端返回配置时会对 API key 脱敏，避免明文泄露。
 
@@ -106,7 +106,7 @@ AI 命题任务支持：
 - 任务状态查看：pending、running、success、failed、cancelled
 - 进度展示：0 到 100 的任务进度
 - 中断接口：可取消未完成任务
-- Token 与费用统计：OpenAI-compatible API 使用响应中的 `usage` 字段
+- Token 与费用统计：`/responses` 使用 `usage.input_tokens` 和 `usage.output_tokens`；`/chat/completions` 使用 `usage.prompt_tokens` 和 `usage.completion_tokens`
 - 题目导入：管理员可以将生成的题目保存到题目仓库
 
 ## 运行测试

@@ -30,6 +30,7 @@ class ProblemRepository:
         await asyncio.to_thread(self.problems_dir.mkdir, parents=True, exist_ok=True)
 
     def _problem_path(self, problem_id: str) -> Path:
+        """根据题目ID构造路径"""
         problem_path = (self.problems_dir / f"{problem_id}.json").resolve()
         problems_root = self.problems_dir.resolve()
 
@@ -40,6 +41,7 @@ class ProblemRepository:
 
     @staticmethod
     def _read_problem_file(problem_path: Path) -> Problem:
+        """读取题目JSON文件并检查是否符合要求，返回内容"""
         try:
             content = problem_path.read_text(encoding="utf-8")
             return Problem.model_validate_json(content)
@@ -48,6 +50,7 @@ class ProblemRepository:
 
     @staticmethod
     def _write_problem_file(problem_path: Path, problem: Problem) -> None:
+        """写入JSON文件"""
         payload = json.dumps(
             problem.model_dump(mode="json"),
             ensure_ascii=False,
@@ -77,6 +80,7 @@ class ProblemRepository:
             raise ProblemStorageError("failed to write problem file") from error
 
     def _list_problems_sync(self) -> list[ProblemSummary]:
+        """真正执行从存储层获取题目列表"""
         summaries = []
 
         for problem_path in self.problems_dir.glob("*.json"):
@@ -86,10 +90,12 @@ class ProblemRepository:
         return sorted(summaries, key=lambda problem: problem.id)
 
     async def list_problems(self) -> list[ProblemSummary]:
+        """将上一个函数异步封装，被main.py调用"""
         async with self._lock:
             return await asyncio.to_thread(self._list_problems_sync)
 
     async def get_problem(self, problem_id: str) -> Problem:
+        """查询详情，用到获取路径和读"""
         async with self._lock:
             problem_path = self._problem_path(problem_id)
 
@@ -99,6 +105,7 @@ class ProblemRepository:
             return await asyncio.to_thread(self._read_problem_file, problem_path)
 
     async def add_problem(self, problem: Problem) -> None:
+        """添加题目，用到获取路径和写"""
         async with self._lock:
             problem_path = self._problem_path(problem.id)
 

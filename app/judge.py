@@ -22,10 +22,12 @@ from app.models import (
 
 
 def normalize_output(output: str) -> str:
+    """消除尾部空白"""
     return "\n".join(line.rstrip() for line in output.rstrip().splitlines())
 
 
 async def judge_submission(
+    
     problem: Problem,
     submission: SubmissionCreate,
     language: LanguageConfig,
@@ -135,7 +137,7 @@ async def run_single_case(
                 elapsed_time = time.perf_counter() - start_time
                 return TestCaseResult(
                     id=case_id,
-                    result=TestCaseStatus.TLE,
+                    result=TestCaseStatus.TLE, # TLE
                     time=elapsed_time,
                     memory=0,
                 )
@@ -149,7 +151,7 @@ async def run_single_case(
             if memory_state["result"] == TestCaseStatus.MLE:
                 return TestCaseResult(
                     id=case_id,
-                    result=TestCaseStatus.MLE,
+                    result=TestCaseStatus.MLE, # MLE
                     time=elapsed_time,
                     memory=memory_state["memory"],
                 )
@@ -157,7 +159,7 @@ async def run_single_case(
             if process.returncode != 0:
                 return TestCaseResult(
                     id=case_id,
-                    result=TestCaseStatus.RE,
+                    result=TestCaseStatus.RE, # RE
                     time=elapsed_time,
                     memory=0,
                 )
@@ -166,9 +168,9 @@ async def run_single_case(
             normalized_expected = normalize_output(expected_output)
 
             if actual_output == normalized_expected:
-                result = TestCaseStatus.AC
+                result = TestCaseStatus.AC # AC
             else:
-                result = TestCaseStatus.WA
+                result = TestCaseStatus.WA # WA
 
             return TestCaseResult(
                 id=case_id,
@@ -222,6 +224,7 @@ async def compile_source(
 
 
 def executable_name(name: str) -> str:
+    """适配win操作系统的.exe写法"""
     if sys.platform.startswith("win"):
         return f"{name}.exe"
 
@@ -230,31 +233,6 @@ def executable_name(name: str) -> str:
 def build_command(run_cmd: str, source_path: Path, exe_path: Path) -> list[str]:
     command_text = run_cmd.format(src=str(source_path), exe=str(exe_path))
     return command_text.split()
-
-async def monitor_memory(process, memory_limit: int, state: dict) -> None:
-    try:
-        parent = psutil.Process(process.pid)
-
-        while process.returncode is None:
-            processes = [parent] + parent.children(recursive=True)
-            memory = 0
-
-            for child in processes:
-                with contextlib.suppress(psutil.Error):
-                    memory += child.memory_info().rss
-
-            memory_mb = memory / 1024 / 1024
-            state["memory"] = max(state.get("memory", 0), int(memory_mb))
-
-            if memory_mb > memory_limit:
-                state["result"] = TestCaseStatus.MLE
-                kill_process_tree(process)
-                return
-
-            await asyncio.sleep(0.02)
-    except psutil.Error:
-        return
-
 
 def kill_process_tree(process) -> None:
     with contextlib.suppress(psutil.Error):

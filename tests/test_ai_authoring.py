@@ -5,7 +5,8 @@ import pytest
 from app.ai_authoring import (
     AiProblemTaskNotFoundError,
     AiProblemTaskRepository,
-    call_openai_compatible_provider,
+    call_chat_completions_provider,
+    call_responses_api_provider,
 )
 from app.models import (
     AiModelConfig,
@@ -117,7 +118,58 @@ def test_ai_task_repository_rejects_missing_task():
         asyncio.run(repository.get_task("missing"))
 
 
-def test_openai_compatible_provider_uses_bearer_token_and_usage(monkeypatch):
+def test_responses_api_provider_uses_output_text_and_usage(monkeypatch):
+    repository = AiProblemTaskRepository()
+    task = asyncio.run(repository.create_task("user-1", make_ai_request()))
+    config = AiModelConfig(
+        provider_url="https://example.com/v1/responses",
+        model_name="example-model",
+        api_key="secret-api-key",
+        input_price_per_1k=0.001,
+        output_price_per_1k=0.002,
+    )
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": make_problem().model_dump_json(),
+                            },
+                        ],
+                    },
+                ],
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 200,
+                },
+            }
+
+    def fake_post(url, json, headers, timeout):
+        assert url == "https://example.com/v1/responses"
+        assert json["model"] == "example-model"
+        assert "input" in json
+        assert headers["Authorization"] == "Bearer secret-api-key"
+        return FakeResponse()
+
+    monkeypatch.setattr("app.ai_authoring.requests.post", fake_post)
+
+    problem, usage = call_responses_api_provider(task, config)
+
+    assert problem.id == "AI1001"
+    assert usage.input_tokens == 100
+    assert usage.output_tokens == 200
+    assert usage.total_cost == 0.0005
+
+
+def test_chat_completions_provider_uses_bearer_token_and_usage(monkeypatch):
     repository = AiProblemTaskRepository()
     task = asyncio.run(repository.create_task("user-1", make_ai_request()))
     config = AiModelConfig(
@@ -151,7 +203,7 @@ def test_openai_compatible_provider_uses_bearer_token_and_usage(monkeypatch):
 
     monkeypatch.setattr("app.ai_authoring.requests.post", fake_post)
 
-    problem, usage = call_openai_compatible_provider(task, config)
+    problem, usage = call_chat_completions_provider(task, config)
 
     assert problem.id == "AI1001"
     assert usage.input_tokens == 100

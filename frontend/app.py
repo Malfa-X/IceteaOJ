@@ -37,7 +37,6 @@ PAGE_DESCRIPTIONS = {
     "AI Authoring": "通过可配置 AI 任务生成题目草稿。",
 }
 
-
 STATUS_LABELS = {
     "pending": "等待处理",
     "running": "运行中",
@@ -46,7 +45,6 @@ STATUS_LABELS = {
     "failed": "失败",
     "cancelled": "已中断",
 }
-
 
 def get_api_client() -> ApiClient:
     if "api_client" not in st.session_state:
@@ -108,7 +106,7 @@ def reset_submission_code_template() -> None:
 
 
 def use_external_api_template() -> None:
-    st.session_state.ai_provider_url = "https://example.com/v1/chat/completions"
+    st.session_state.ai_provider_url = "https://example.com/v1/responses"
     st.session_state.ai_model_name = "your-model-name"
     st.session_state.ai_api_key = "your-api-key"
     st.session_state.ai_input_price = 0.0
@@ -798,7 +796,7 @@ elif page == "AI Authoring":
                 )
 
                 st.caption(
-                    "请填写符合 OpenAI `/v1/chat/completions` 格式的外部接口。"
+                    "请填写符合 OpenAI `/v1/responses` 或 `/v1/chat/completions` 格式的外部接口。"
                     "拿到真实中转站后，替换模型接口地址、模型名称和 API key 即可。"
                 )
 
@@ -812,7 +810,7 @@ elif page == "AI Authoring":
                 with st.form("ai_config_form"):
                     provider_url = st.text_input(
                         "模型接口地址",
-                        value="https://example.com/v1/chat/completions",
+                        value="https://example.com/v1/responses",
                         key="ai_provider_url",
                     )
                     model_name = st.text_input(

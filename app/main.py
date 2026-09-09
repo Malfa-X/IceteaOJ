@@ -53,6 +53,7 @@ from app.logs import (
 )
 
 def api_response(code: int, msg: str, data: object | None = None) -> dict:
+    """让所有接口返回统一格式"""
     return {
         "code": code,
         "msg": msg,
@@ -61,11 +62,11 @@ def api_response(code: int, msg: str, data: object | None = None) -> dict:
 
 
 def create_app(problems_dir: Path | None = None) -> FastAPI:
+    """创建整个FastAPI应用"""
     repository = ProblemRepository(problems_dir or Path("data/problems"))
     language_registry = LanguageRegistry()
     submission_repository = SubmissionRepository()
     user_repository = UserRepository()
-    submission_repository = SubmissionRepository()
     submission_log_repository = SubmissionLogRepository()
     access_log_repository = AccessLogRepository()
     user_repository = UserRepository()
@@ -74,11 +75,13 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        """应用启动时执行，初始化题目目录和默认用户（3个）"""
         await repository.initialize()
         await user_repository.initialize()
         yield
 
     async def run_judge_task(submission_id: str, submission_create: SubmissionCreate):
+        """基于给出的submission后台判断题目"""
         try:
             problem = await repository.get_problem(submission_create.problem_id)
             language = language_registry.get_language(submission_create.language)
@@ -113,6 +116,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             )
 
     async def get_current_user(request: Request) -> UserPublic | None:
+        """从请求session中找出当前登录用户，返回的user是从repository找的"""
         user_id = request.session.get("user_id")
         if user_id is None:
             return None
@@ -120,21 +124,25 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         return await user_repository.get_user(user_id)
 
     def require_permission_response() -> JSONResponse:
+        """返回提醒403权限不足的信息"""
         return JSONResponse(
             status_code=403,
             content=api_response(403, "permission denied"),
         )
 
     def is_admin(user: UserPublic) -> bool:
+        """判断当前登录用户是否为admin"""
         return user.role == UserRole.ADMIN
 
     def require_login_response() -> JSONResponse:
+        """返回提醒401未登录的信息"""
         return JSONResponse(
             status_code=401,
             content=api_response(401, "not logged in"),
         )
 
     def submission_to_create(submission) -> SubmissionCreate:
+        """基于submission创建新submission"""
         return SubmissionCreate(
             problem_id=submission.problem_id,
             language=submission.language,
@@ -147,6 +155,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         page: int | None,
         page_size: int | None,
     ) -> JSONResponse | None:
+        """负责判断subimssion list请求参数是否符合要求"""
         if user_id is None and problem_id is None:
             return JSONResponse(
                 status_code=400,
@@ -177,6 +186,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         page: int | None,
         page_size: int | None,
     ) -> JSONResponse | None:
+        """负责判断paginator的参数是否符合要求"""
         if page is not None and page_size is None:
             return JSONResponse(
                 status_code=400,
@@ -198,6 +208,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         return None
 
     def submission_to_summary(submission) -> dict:
+        """从完整的submission中抽取id,status,score,counts"""
         item = {
             "submission_id": submission.submission_id,
             "status": submission.status,
@@ -717,6 +728,25 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         await repository.add_problem(problem)
         return api_response(200, "add success", {"id": problem.id})
 
+    @app.put("/api/problems/{problem_id}")
+    async def update_problem(
+        request: Request,
+        problem_id: Annotated[ProblemId, ApiPath()],
+        problem: Problem,
+    ):
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
+        if problem_id != problem.id:
+            return JSONResponse(
+                status_code=400,
+                content=api_response(400, "path id and body id must match"),
+            )
+
+        await repository.update_problem(problem_id, problem)
+        return api_response(200, "update success", {"id": problem.id})
+
     @app.post("/api/submissions/")
     async def add_submission(
         request: Request,
@@ -786,25 +816,6 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
         request.session.clear()
         return api_response(200, "logout success", None)
-
-    @app.put("/api/problems/{problem_id}")
-    async def update_problem(
-        request: Request,
-        problem_id: Annotated[ProblemId, ApiPath()],
-        problem: Problem,
-    ):
-        current_user = await get_current_user(request)
-        if current_user is None:
-            return require_login_response()
-
-        if problem_id != problem.id:
-            return JSONResponse(
-                status_code=400,
-                content=api_response(400, "path id and body id must match"),
-            )
-
-        await repository.update_problem(problem_id, problem)
-        return api_response(200, "update success", {"id": problem.id})
 
     @app.put("/api/problems/{problem_id}/log_visibility")
     async def update_problem_log_visibility(

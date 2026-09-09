@@ -23,6 +23,7 @@ class TestCase(BaseModel):
 
 
 class Problem(BaseModel):
+    """题目"""
     model_config = ConfigDict(extra="forbid")
 
     id: ProblemId
@@ -49,12 +50,14 @@ class ProblemSummary(BaseModel):
     title: str
 
 class SubmissionStatus(StrEnum):
+    """提交状态"""
     PENDING = "pending"
     SUCCESS = "success"
     ERROR = "error"
 
 
 class TestCaseStatus(StrEnum):
+    """提交代码测试后测试点状态"""
     AC = "AC"
     WA = "WA"
     TLE = "TLE"
@@ -65,6 +68,7 @@ class TestCaseStatus(StrEnum):
 
 
 class SubmissionCreate(BaseModel):
+    """提交请求"""
     model_config = ConfigDict(extra="forbid")
 
     problem_id: ProblemId
@@ -83,6 +87,7 @@ class RunInfo(BaseModel):
 
 
 class TestCaseResult(BaseModel):
+    """单个测试点结果"""
     id: int
     result: TestCaseStatus
     time: float = Field(default=0.0, ge=0)
@@ -90,6 +95,7 @@ class TestCaseResult(BaseModel):
 
 
 class JudgeResult(BaseModel):
+    """题目判断结果"""
     score: int = Field(ge=0)
     counts: int = Field(ge=0)
     compile_info: CompileInfo | None = None
@@ -123,6 +129,7 @@ class Submission(BaseModel):
     error_info: str | None = None
 
 class LanguageConfig(BaseModel):
+    """语言配置模型，里面有默认TL和ML"""
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
