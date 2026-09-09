@@ -107,18 +107,10 @@ def reset_submission_code_template() -> None:
     st.session_state.submit_code = default_code_template(language)
 
 
-def use_local_ollama_preset() -> None:
-    st.session_state.ai_provider_url = "http://127.0.0.1:11434/api/chat"
-    st.session_state.ai_model_name = "qwen2.5:7b"
-    st.session_state.ai_api_key = "local-ollama-no-key"
-    st.session_state.ai_input_price = 0.0
-    st.session_state.ai_output_price = 0.0
-
-
-def use_ddpro_placeholder_preset() -> None:
-    st.session_state.ai_provider_url = "https://ddpro.ai/v1/chat/completions"
-    st.session_state.ai_model_name = "qwen2.5:7b"
-    st.session_state.ai_api_key = "sk-123456789"
+def use_external_api_template() -> None:
+    st.session_state.ai_provider_url = "https://example.com/v1/chat/completions"
+    st.session_state.ai_model_name = "your-model-name"
+    st.session_state.ai_api_key = "your-api-key"
     st.session_state.ai_input_price = 0.0
     st.session_state.ai_output_price = 0.0
 
@@ -800,21 +792,14 @@ elif page == "AI Authoring":
             if current_user["role"] != "admin":
                 st.warning("只有管理员可以管理 AI 模型配置。")
             else:
-                preset_col1, preset_col2 = st.columns(2)
-                with preset_col1:
-                    st.button(
-                        "使用本地 Ollama qwen2.5:7b",
-                        on_click=use_local_ollama_preset,
-                    )
-                with preset_col2:
-                    st.button(
-                        "使用 ddpro.ai 占位 API",
-                        on_click=use_ddpro_placeholder_preset,
-                    )
+                st.button(
+                    "使用外部 API 配置模板",
+                    on_click=use_external_api_template,
+                )
 
                 st.caption(
-                    "`ddpro.ai` 是一个占位的 OpenAI 兼容格式中转站。"
-                    "拿到真实中转站后，替换 URL 和 API key 即可。"
+                    "请填写符合 OpenAI `/v1/chat/completions` 格式的外部接口。"
+                    "拿到真实中转站后，替换模型接口地址、模型名称和 API key 即可。"
                 )
 
                 if st.button("加载当前 AI 配置"):
@@ -827,17 +812,17 @@ elif page == "AI Authoring":
                 with st.form("ai_config_form"):
                     provider_url = st.text_input(
                         "模型接口地址",
-                        value="mock://local",
+                        value="https://example.com/v1/chat/completions",
                         key="ai_provider_url",
                     )
                     model_name = st.text_input(
                         "模型名称",
-                        value="mock-problem-generator",
+                        value="your-model-name",
                         key="ai_model_name",
                     )
                     api_key = st.text_input(
                         "API key",
-                        value="mock-api-key",
+                        value="your-api-key",
                         type="password",
                         key="ai_api_key",
                     )

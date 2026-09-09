@@ -5,7 +5,6 @@ import pytest
 from app.ai_authoring import (
     AiProblemTaskNotFoundError,
     AiProblemTaskRepository,
-    call_ollama_provider,
     call_openai_compatible_provider,
 )
 from app.models import (
@@ -83,7 +82,7 @@ def test_ai_task_repository_finishes_task_with_problem_and_usage():
         input_cost=0.001,
         output_cost=0.004,
         total_cost=0.005,
-        pricing_note="mock pricing",
+        pricing_note="test pricing",
     )
 
     finished = asyncio.run(
@@ -118,51 +117,13 @@ def test_ai_task_repository_rejects_missing_task():
         asyncio.run(repository.get_task("missing"))
 
 
-def test_ollama_provider_parses_problem_and_token_usage(monkeypatch):
-    repository = AiProblemTaskRepository()
-    task = asyncio.run(repository.create_task("user-1", make_ai_request()))
-    config = AiModelConfig(
-        provider_url="http://127.0.0.1:11434/api/chat",
-        model_name="qwen2.5:7b",
-        api_key="local-ollama-no-key",
-        input_price_per_1k=0,
-        output_price_per_1k=0,
-    )
-
-    class FakeResponse:
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {
-                "message": {"content": make_problem().model_dump_json()},
-                "prompt_eval_count": 12,
-                "eval_count": 34,
-            }
-
-    def fake_post(url, json, timeout):
-        assert url == "http://127.0.0.1:11434/api/chat"
-        assert json["model"] == "qwen2.5:7b"
-        assert json["stream"] is False
-        return FakeResponse()
-
-    monkeypatch.setattr("app.ai_authoring.requests.post", fake_post)
-
-    problem, usage = call_ollama_provider(task, config)
-
-    assert problem.id == "AI1001"
-    assert usage.input_tokens == 12
-    assert usage.output_tokens == 34
-    assert usage.total_cost == 0
-
-
 def test_openai_compatible_provider_uses_bearer_token_and_usage(monkeypatch):
     repository = AiProblemTaskRepository()
     task = asyncio.run(repository.create_task("user-1", make_ai_request()))
     config = AiModelConfig(
-        provider_url="https://ddpro.ai/v1/chat/completions",
-        model_name="qwen2.5:7b",
-        api_key="sk-123456789",
+        provider_url="https://example.com/v1/chat/completions",
+        model_name="example-model",
+        api_key="secret-api-key",
         input_price_per_1k=0.001,
         output_price_per_1k=0.002,
     )
@@ -183,9 +144,9 @@ def test_openai_compatible_provider_uses_bearer_token_and_usage(monkeypatch):
             }
 
     def fake_post(url, json, headers, timeout):
-        assert url == "https://ddpro.ai/v1/chat/completions"
-        assert json["model"] == "qwen2.5:7b"
-        assert headers["Authorization"] == "Bearer sk-123456789"
+        assert url == "https://example.com/v1/chat/completions"
+        assert json["model"] == "example-model"
+        assert headers["Authorization"] == "Bearer secret-api-key"
         return FakeResponse()
 
     monkeypatch.setattr("app.ai_authoring.requests.post", fake_post)

@@ -86,33 +86,17 @@ password: admintestpassword
 
 前端入口位于 Streamlit 侧边栏的 `AI Authoring` 页面。
 
-当前支持三种模型调用配置。
+当前仅支持外部 OpenAI-compatible API 配置。项目不提供模拟题目生成器；如果没有可用的外部 API，AI 命题任务会失败并提示用户配置真实可访问的模型接口。
 
-本地模拟 provider，用于无模型环境下稳定演示：
-
-```text
-provider_url: mock://local
-model_name: mock-problem-generator
-api_key: mock-api-key
-```
-
-本地 Ollama provider，用于调用本机下载的 `qwen2.5:7b`：
+外部 API 配置示例：
 
 ```text
-provider_url: http://127.0.0.1:11434/api/chat
-model_name: qwen2.5:7b
-api_key: local-ollama-no-key
+provider_url: https://example.com/v1/chat/completions
+model_name: your-model-name
+api_key: your-api-key
 ```
 
-外部 OpenAI-compatible API provider，占位使用 `ddpro.ai`：
-
-```text
-provider_url: https://ddpro.ai/v1/chat/completions
-model_name: qwen2.5:7b
-api_key: sk-123456789
-```
-
-`ddpro.ai` 是当前的假想 API 中转站，后续拿到真实中转站信息后，只需要替换 provider URL、model name 和 API key。代码按 OpenAI-compatible `/chat/completions` 响应格式解析。
+后续拿到真实中转站信息后，只需要替换 provider URL、model name 和 API key。代码按 OpenAI-compatible `/chat/completions` 响应格式解析。
 
 管理员可以在页面中配置 provider URL、model name、API key 和输入/输出 token 单价。后端返回配置时会对 API key 脱敏，避免明文泄露。
 
@@ -122,7 +106,7 @@ AI 命题任务支持：
 - 任务状态查看：pending、running、success、failed、cancelled
 - 进度展示：0 到 100 的任务进度
 - 中断接口：可取消未完成任务
-- Token 与费用统计：mock 模式使用字符数估算；Ollama 使用 `prompt_eval_count` 和 `eval_count`；OpenAI-compatible API 使用响应中的 `usage` 字段
+- Token 与费用统计：OpenAI-compatible API 使用响应中的 `usage` 字段
 - 题目导入：管理员可以将生成的题目保存到题目仓库
 
 ## 运行测试
