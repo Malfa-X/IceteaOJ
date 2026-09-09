@@ -118,13 +118,12 @@ async def run_single_case(
             )
 
             memory_thread = None
-            if memory_limit < 128:
-                memory_thread = threading.Thread(
-                    target=monitor_memory_sync,
-                    args=(process, memory_limit, memory_state),
-                    daemon=True,
-                )
-                memory_thread.start()
+            memory_thread = threading.Thread(
+                target=monitor_memory_sync,
+                args=(process, memory_limit, memory_state),
+                daemon=True,
+            )
+            memory_thread.start()
 
             try:
                 stdout, stderr = process.communicate(
