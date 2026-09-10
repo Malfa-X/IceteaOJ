@@ -484,6 +484,10 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
     @app.get("/api/languages/") # 获得支持的语言列表
     async def list_languages() -> dict:
+        current_user = await get_current_user(request)
+        if current_user is None:
+            return require_login_response()
+
         return api_response(
             200,
             "success",
