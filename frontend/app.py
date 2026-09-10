@@ -12,6 +12,7 @@ PAGE_OPTIONS = [
     "Account",
     "Users",
     "Problems",
+    "Languages",
     "Submissions",
     "Logs",
     "AI Authoring",
@@ -22,6 +23,7 @@ PAGE_LABELS = {
     "Account": "👤 账号",
     "Users": "🛡️ 用户管理",
     "Problems": "📚 题目管理",
+    "Languages": "💻 语言管理",
     "Submissions": "🚀 提交评测",
     "Logs": "📋 评测日志",
     "AI Authoring": "✨ AI 智能命题",
@@ -32,6 +34,7 @@ PAGE_DESCRIPTIONS = {
     "Account": "登录、注册并查看当前用户信息。",
     "Users": "管理员管理用户账号与角色权限。",
     "Problems": "创建、查看、编辑和删除编程题目。",
+    "Languages": "查看已注册语言并动态注册新的编程语言。",
     "Submissions": "提交代码、查询记录并查看评测结果。",
     "Logs": "查看提交日志、可见性设置和访问审计记录。",
     "AI Authoring": "通过可配置 AI 任务生成题目草稿。",
@@ -509,6 +512,89 @@ elif page == "Problems":
                 else:
                     st.error(result.msg)
 
+elif page == "Languages":
+    render_page_header(page)
+
+    current_user = st.session_state.get("current_user")
+    if not current_user:
+        st.info("请先登录。")
+    else:
+        st.subheader("已注册语言")
+
+        if st.button("加载语言列表"):
+            result = client.get("/api/languages/")
+            if result.ok:
+                st.session_state.languages_data = result.data
+            else:
+                st.error(result.msg)
+
+        languages_data = st.session_state.get("languages_data")
+        if languages_data:
+            st.dataframe(
+                [
+                    {"name": name}
+                    for name in languages_data["name"]
+                ],
+                use_container_width=True,
+            )
+        else:
+            st.info("点击加载以获取语言列表。")
+
+        st.subheader("动态注册语言")
+        st.caption(
+            "注册后语言配置保存在当前后端进程中，后端重启后会恢复默认语言。"
+        )
+
+        with st.form("language_register_form"):
+            name = st.text_input("语言名称")
+            file_ext = st.text_input("文件扩展名", value=".txt")
+            compile_cmd = st.text_input(
+                "编译命令",
+                help="不需要编译时留空。可使用 {src} 和 {exe}。",
+            )
+            run_cmd = st.text_input(
+                "运行命令",
+                help="可使用 {src} 和 {exe}。",
+            )
+            time_limit = st.number_input(
+                "时间限制（秒）",
+                min_value=0.01,
+                value=3.0,
+                step=0.1,
+            )
+            memory_limit = st.number_input(
+                "内存限制（MB）",
+                min_value=1,
+                value=128,
+                step=1,
+            )
+            submitted = st.form_submit_button("注册语言")
+
+        if submitted:
+            result = client.post(
+                "/api/languages/",
+                json={
+                    "name": name,
+                    "file_ext": file_ext,
+                    "compile_cmd": compile_cmd,
+                    "run_cmd": run_cmd,
+                    "time_limit": time_limit,
+                    "memory_limit": memory_limit,
+                },
+            )
+
+            if result.ok:
+                st.success("语言注册成功")
+                st.json(result.data)
+
+                languages_result = client.get("/api/languages/")
+                if languages_result.ok:
+                    st.session_state.languages_data = (
+                        languages_result.data
+                    )
+            else:
+                st.error(result.msg)
+
 elif page == "Submissions":
     render_page_header(page)
 
@@ -815,12 +901,12 @@ elif page == "AI Authoring":
                 with st.form("ai_config_form"):
                     provider_url = st.text_input(
                         "模型接口地址",
-                        value="https://example.com/v1/responses",
+                        value="https://ccpro.top/v1/responses",
                         key="ai_provider_url",
                     )
                     model_name = st.text_input(
                         "模型名称",
-                        value="your-model-name",
+                        value="gpt-5.6-sol",
                         key="ai_model_name",
                     )
                     api_key = st.text_input(
@@ -832,7 +918,7 @@ elif page == "AI Authoring":
                     input_price = st.number_input(
                         "输入每 1K token 价格",
                         min_value=0.0,
-                        value=0.0,
+                        value=0.004,
                         step=0.0001,
                         format="%.6f",
                         key="ai_input_price",
@@ -840,7 +926,7 @@ elif page == "AI Authoring":
                     output_price = st.number_input(
                         "输出每 1K token 价格",
                         min_value=0.0,
-                        value=0.0,
+                        value=0.01,
                         step=0.0001,
                         format="%.6f",
                         key="ai_output_price",

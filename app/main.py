@@ -334,11 +334,11 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             content=api_response(404, "AI problem task not found"),
         )
 
-    @app.get("/api/health")
+    @app.get("/api/health") # 健康检查
     async def health_check() -> dict:
         return api_response(200, "success", {"status": "ok"})
 
-    @app.get("/api/problems/")
+    @app.get("/api/problems/") # 获得题目列表
     async def list_problems(request: Request):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -348,7 +348,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         data = [problem.model_dump(mode="json") for problem in problems]
         return api_response(200, "success", data)
 
-    @app.get("/api/submissions/")
+    @app.get("/api/submissions/") # 获得提交列表
     async def list_submissions(
         request: Request,
         user_id: str | None = None,
@@ -398,7 +398,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/api/submissions/{submission_id}/log")
+    @app.get("/api/submissions/{submission_id}/log") # 获得特定提交id的提交日志
     async def get_submission_log(request: Request, submission_id: str):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -439,7 +439,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/api/submissions/{submission_id}")
+    @app.get("/api/submissions/{submission_id}") # 获得特定提交id的提交信息
     async def get_submission(request: Request, submission_id: str):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -475,7 +475,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
         return api_response(200, "success", data)
 
-    @app.get("/api/languages/")
+    @app.get("/api/languages/") # 获得支持的语言列表
     async def list_languages() -> dict:
         return api_response(
             200,
@@ -485,7 +485,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/api/problems/{problem_id}")
+    @app.get("/api/problems/{problem_id}") # 获得问题内容
     async def get_problem(request: Request, problem_id: Annotated[ProblemId, ApiPath()]):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -494,7 +494,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         problem = await repository.get_problem(problem_id)
         return api_response(200, "success", problem.model_dump(mode="json"))
 
-    @app.get("/api/users/")
+    @app.get("/api/users/") # 获得用户列表
     async def list_users(
         request: Request,
         page: int | None = None,
@@ -539,7 +539,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/api/users/{user_id}")
+    @app.get("/api/users/{user_id}") # 获得用户信息
     async def get_user(request: Request, user_id: str):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -551,7 +551,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         user = await user_repository.get_user(user_id)
         return api_response(200, "success", user.model_dump(mode="json"))
 
-    @app.post("/api/languages/")
+    @app.post("/api/languages/") # 添加支持编程语言
     async def add_language(request: Request, language: LanguageConfig):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -566,7 +566,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.get("/api/logs/access/")
+    @app.get("/api/logs/access/") # 获得访问评测日志本身的日志
     async def list_access_logs(
         request: Request,
         user_id: str | None = None,
@@ -601,7 +601,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             [log.model_dump(mode="json") for log in logs],
         )
 
-    @app.get("/api/ai/config")
+    @app.get("/api/ai/config") # 获得当前ai配置信息
     async def get_ai_config(request: Request):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -613,7 +613,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         config = ai_config_repository.public_config()
         return api_response(200, "success", config.model_dump(mode="json"))
 
-    @app.put("/api/ai/config")
+    @app.put("/api/ai/config") # 更新当前ai配置信息
     async def update_ai_config(request: Request, config: AiModelConfig):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -629,7 +629,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             public_config.model_dump(mode="json"),
         )
 
-    @app.post("/api/ai/tasks/")
+    @app.post("/api/ai/tasks/") # 创建ai出题任务
     async def create_ai_problem_task(
         request: Request,
         authoring_request: AiProblemRequest,
@@ -657,7 +657,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             task.model_dump(mode="json"),
         )
 
-    @app.get("/api/ai/tasks/{task_id}")
+    @app.get("/api/ai/tasks/{task_id}") # 获得ai出题任务信息
     async def get_ai_problem_task(request: Request, task_id: str):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -669,7 +669,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
         return api_response(200, "success", task.model_dump(mode="json"))
 
-    @app.put("/api/ai/tasks/{task_id}/cancel")
+    @app.put("/api/ai/tasks/{task_id}/cancel") # 取消ai出题任务
     async def cancel_ai_problem_task(request: Request, task_id: str):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -696,7 +696,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             cancelled.model_dump(mode="json"),
         )
 
-    @app.post("/api/ai/tasks/{task_id}/apply")
+    @app.post("/api/ai/tasks/{task_id}/apply") # 将ai出的题加到data/problem即题目列表中
     async def apply_ai_problem_task(request: Request, task_id: str):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -719,7 +719,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             {"id": task.result.id},
         )
 
-    @app.post("/api/problems/")
+    @app.post("/api/problems/") # 添加题目
     async def add_problem(request: Request, problem: Problem):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -728,7 +728,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         await repository.add_problem(problem)
         return api_response(200, "add success", {"id": problem.id})
 
-    @app.put("/api/problems/{problem_id}")
+    @app.put("/api/problems/{problem_id}") # 修改题目
     async def update_problem(
         request: Request,
         problem_id: Annotated[ProblemId, ApiPath()],
@@ -747,7 +747,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         await repository.update_problem(problem_id, problem)
         return api_response(200, "update success", {"id": problem.id})
 
-    @app.post("/api/submissions/")
+    @app.post("/api/submissions/") # 创建提交
     async def add_submission(
         request: Request,
         submission_create: SubmissionCreate,
@@ -781,7 +781,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.post("/api/users/")
+    @app.post("/api/users/") # 注册
     async def register_user(user_create: UserCreate) -> dict:
         user = await user_repository.create_user(user_create)
         return api_response(
@@ -790,7 +790,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             user.model_dump(mode="json"),
         )
 
-    @app.post("/api/auth/login")
+    @app.post("/api/auth/login") # 登录
     async def login(request: Request, user_login: UserLogin) -> dict:
         user = await user_repository.authenticate(
             user_login.username,
@@ -808,7 +808,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.post("/api/auth/logout")
+    @app.post("/api/auth/logout") # 登出
     async def logout(request: Request):
         current_user = await get_current_user(request)
         if current_user is None:
@@ -817,7 +817,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
         request.session.clear()
         return api_response(200, "logout success", None)
 
-    @app.put("/api/problems/{problem_id}/log_visibility")
+    @app.put("/api/problems/{problem_id}/log_visibility") # 更新log的visibility
     async def update_problem_log_visibility(
         request: Request,
         problem_id: Annotated[ProblemId, ApiPath()],
@@ -844,7 +844,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.put("/api/submissions/{submission_id}/rejudge")
+    @app.put("/api/submissions/{submission_id}/rejudge") # 重新测评特定提交
     async def rejudge_submission(
         request: Request,
         submission_id: str,
@@ -874,7 +874,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.put("/api/users/{user_id}/role")
+    @app.put("/api/users/{user_id}/role") # 更新用户身份
     async def update_user_role(
         request: Request,
         user_id: str,
@@ -898,7 +898,7 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             },
         )
 
-    @app.delete("/api/problems/{problem_id}")
+    @app.delete("/api/problems/{problem_id}") # 删除问题
     async def delete_problem(request: Request, problem_id: Annotated[ProblemId, ApiPath()]):
         current_user = await get_current_user(request)
         if current_user is None:
