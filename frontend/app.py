@@ -661,17 +661,16 @@ elif page == "Submissions":
 
             if st.button("加载提交记录"):
                 params = {
-                    "problem_id": query_problem_id,
                     "page_size": page_size,
                 }
+
+                if query_problem_id.strip():
+                    params["problem_id"] = query_problem_id.strip()
+
                 if query_status:
                     params["status"] = query_status
 
                 result = client.get("/api/submissions/", params=params)
-                if result.ok:
-                    st.session_state.submissions_data = result.data
-                else:
-                    st.error(result.msg)
 
             submissions_data = st.session_state.get("submissions_data")
             if submissions_data:
@@ -901,12 +900,12 @@ elif page == "AI Authoring":
                 with st.form("ai_config_form"):
                     provider_url = st.text_input(
                         "模型接口地址",
-                        value="https://ccpro.top/v1/responses",
+                        value="https://example.com/v1/responses",
                         key="ai_provider_url",
                     )
                     model_name = st.text_input(
                         "模型名称",
-                        value="gpt-5.6-sol",
+                        value="example",
                         key="ai_model_name",
                     )
                     api_key = st.text_input(
@@ -918,7 +917,7 @@ elif page == "AI Authoring":
                     input_price = st.number_input(
                         "输入每 1K token 价格",
                         min_value=0.0,
-                        value=0.004,
+                        value=0.000,
                         step=0.0001,
                         format="%.6f",
                         key="ai_input_price",
@@ -926,7 +925,7 @@ elif page == "AI Authoring":
                     output_price = st.number_input(
                         "输出每 1K token 价格",
                         min_value=0.0,
-                        value=0.01,
+                        value=0.000,
                         step=0.0001,
                         format="%.6f",
                         key="ai_output_price",
