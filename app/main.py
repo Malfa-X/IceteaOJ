@@ -207,11 +207,15 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
 
         return None
 
-    def submission_to_summary(submission) -> dict:
-        """从完整的submission中抽取id,status,score,counts"""
+    async def submission_to_summary(submission) -> dict:
+        user = await user_repository.get_user(submission.user_id)
+
         item = {
             "submission_id": submission.submission_id,
             "status": submission.status,
+            "user_id": submission.user_id,
+            "username": user.username,
+            "problem_id": submission.problem_id,
         }
 
         if submission.status == SubmissionStatus.SUCCESS:
@@ -387,7 +391,10 @@ def create_app(problems_dir: Path | None = None) -> FastAPI:
             page_size=page_size,
         )
 
-        data = [submission_to_summary(submission) for submission in submissions]
+        data = [
+            await submission_to_summary(submission)
+            for submission in submissions
+        ]
 
         return api_response(
             200,
